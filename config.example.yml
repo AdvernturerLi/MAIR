@@ -1,0 +1,7 @@
+# 复制本文件为 config.yml，并填入你的 API key。
+# MAIR 走 OpenAI 兼容接口，默认用 DeepSeek。
+OPENAI_API_KEY: "在此填入你的-API-KEY"
+OPENAI_BASE_URL: "https://api.deepseek.com"
+OPENAI_MODEL: "deepseek-v4-flash-vision-exp"
+MAX_TOKENS: 8192
+TEMPERATURE: 0.0

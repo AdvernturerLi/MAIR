@@ -1,0 +1,27 @@
+# MAIR-available-noexp-v1 实际运行命令（记录）
+
+## 环境
+- 服务器：ssh -p 29119 root@10.251.171.6（学校 gpu-vm，A100 40G）
+- 主环境：/opt/miniconda/envs/diffbir（torch 1.13.1+cu117）
+- DepictQA 环境：/opt/miniconda/envs/depictqa
+
+## 启动 DepictQA 评估服务（串行）
+cd /root/autodl-tmp/AgenticIR/DepictQA
+source /opt/miniconda/etc/profile.d/conda.sh && conda activate depictqa
+export PYTHONPATH=$PWD/src:$PYTHONPATH CUDA_VISIBLE_DEVICES=0 PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:256
+setsid nohup python src/app_eval.py --cfg experiments/agenticir/config_eval.yaml > /root/depictqa_eval.log 2>&1 < /dev/null &
+setsid nohup python src/app_comp.py --cfg experiments/agenticir/config_comp.yaml > /root/depictqa_comp.log 2>&1 < /dev/null &
+
+## 工具盘点
+/opt/miniconda/envs/diffbir/bin/python check_tools.py
+
+## 8 张预运行
+cd /root/autodl-tmp/MAIR
+/opt/miniconda/envs/diffbir/bin/python experiments/baselines/mair_available_noexp_v1/run_baseline.py --limit 8
+
+## 80 张正式（分两次，中途重启 DepictQA）
+/opt/miniconda/envs/diffbir/bin/python experiments/baselines/mair_available_noexp_v1/run_baseline.py
+/opt/miniconda/envs/diffbir/bin/python experiments/baselines/mair_available_noexp_v1/run_baseline.py --skip-completed
+
+## 指标
+/opt/miniconda/envs/diffbir/bin/python experiments/baselines/mair_available_noexp_v1/run_baseline.py --metrics-only

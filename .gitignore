@@ -22,3 +22,6 @@ experiments/datasets/*/validation/
 experiments/datasets/*/test/
 experiments/functional_verification/lq/
 experiments/functional_verification/runs/
+experiments/baselines/*/runs/
+experiments/baselines/*/preflight/
+*.tar.gz

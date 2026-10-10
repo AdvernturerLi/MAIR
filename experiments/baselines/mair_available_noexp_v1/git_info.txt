@@ -1,0 +1,11 @@
+# Git 信息（MAIR-available-noexp-v1-partial50）
+
+MAIR 代码 commit: 0fa952aafea053a526c2e22620a6aa01b9e1df4e
+
+最近 commit 历史:
+  0fa952a feat: 功能验证核查 + 无泄漏基准数据集 mair_benchmark_v1
+  e425a6d docs: 冻结 MAIR-available-noexp-v1 环境基线（environment.md + check_tools + pytest 输出）
+  a16a661 feat: MAIR 复现修复——指令/多模态规划/经验校验/轨迹/可用性检查/安全解析
+  33b7d01 Initial commit: MAIR reproduction (three-stage prior + two-level agent + tool registry)
+
+工作区状态: experiments/baselines/ 未提交（本轮新增的评估/封存/分析脚本，非核心方法改动）

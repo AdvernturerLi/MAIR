@@ -157,9 +157,21 @@ class Scheduler:
         perception = ", ".join(
             f"{d}: {lvl}" for d, lvl in evaluation if d in degradations
         )
-        if self.with_retrieval:
-            return self._schedule_w_retrieval(lq_path, degradations, agenda, perception, inst)
-        return self._schedule_wo_retrieval(lq_path, degradations, agenda, perception, inst)
+        try:
+            if self.with_retrieval:
+                return self._schedule_w_retrieval(lq_path, degradations, agenda, perception, inst)
+            return self._schedule_wo_retrieval(lq_path, degradations, agenda, perception, inst)
+        except Exception as e:
+            # LLM 排序/格式解析失败：回退到确定性顺序（严重度降序），不中断整条流程
+            self._log(f"阶段内排序失败，回退到严重度降序: {type(e).__name__}: {e}")
+            sev = dict(evaluation)
+            return sorted(
+                agenda,
+                key=lambda s: self.levels.index(
+                    sev.get(self.subtask_degra_dict[s], "very low")
+                ),
+                reverse=True,
+            )
 
     def _schedule_w_retrieval(self, lq_path, degradations, agenda, perception, inst):
         def check_order(schedule):

@@ -156,6 +156,15 @@ class Restormer(Tool):
             'deraining': 'Deraining'
         }
         self.opt_task = opt_dict[subtask]
+        # 权重文件（相对 work_dir），区分各任务（M07）；defocus 权重缺失会被正确识别
+        weight_map = {
+            "Real_Denoising": "Denoising/pretrained_models/real_denoising.pth",
+            "Motion_Deblurring": "Motion_Deblurring/pretrained_models/motion_deblurring.pth",
+            "Single_Image_Defocus_Deblurring":
+                "Defocus_Deblurring/pretrained_models/single_image_defocus_deblurring.pth",
+            "Deraining": "Deraining/pretrained_models/deraining.pth",
+        }
+        self.required_weight_files = [Path(weight_map[self.opt_task])]
 
     def _get_cmd_opts(self) -> list[str]:
         """Requires parameter `input_dir: Path`, `output_dir: Path`, and `opt_task: str`."""

@@ -16,3 +16,9 @@ output/
 
 # 数据集
 dataset/
+
+# 实验数据（图像等大文件不入库；脚本/manifest/文档入库）
+experiments/datasets/*/validation/
+experiments/datasets/*/test/
+experiments/functional_verification/lq/
+experiments/functional_verification/runs/

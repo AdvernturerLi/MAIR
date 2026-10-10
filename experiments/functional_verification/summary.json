@@ -1,0 +1,819 @@
+{
+  "s1_jpeg": {
+    "sample_id": "s1_jpeg",
+    "gt": [
+      "jpeg compression artifact"
+    ],
+    "perception": [
+      [
+        "motion blur",
+        "very low"
+      ],
+      [
+        "defocus blur",
+        "very low"
+      ],
+      [
+        "rain",
+        "very low"
+      ],
+      [
+        "haze",
+        "very low"
+      ],
+      [
+        "dark",
+        "very low"
+      ],
+      [
+        "noise",
+        "very low"
+      ],
+      [
+        "jpeg compression artifact",
+        "high"
+      ]
+    ],
+    "plan": [
+      "jpeg compression artifact removal"
+    ],
+    "ok": true,
+    "experts": {
+      "jpeg compression artifact removal": {
+        "candidates": [
+          "fbcnn_5",
+          "fbcnn_blind",
+          "swinir_40"
+        ],
+        "stop": {
+          "tool": "fbcnn_5",
+          "level": "very low",
+          "reason": "below threshold (low)"
+        }
+      }
+    },
+    "elapsed_s": 11.4
+  },
+  "s2_noise": {
+    "sample_id": "s2_noise",
+    "gt": [
+      "noise"
+    ],
+    "perception": [
+      [
+        "motion blur",
+        "very low"
+      ],
+      [
+        "defocus blur",
+        "very low"
+      ],
+      [
+        "rain",
+        "very low"
+      ],
+      [
+        "haze",
+        "very low"
+      ],
+      [
+        "dark",
+        "very low"
+      ],
+      [
+        "noise",
+        "high"
+      ],
+      [
+        "jpeg compression artifact",
+        "very low"
+      ]
+    ],
+    "plan": [
+      "denoising"
+    ],
+    "ok": true,
+    "experts": {
+      "denoising": {
+        "candidates": [
+          "swinir_50",
+          "restormer",
+          "xrestormer"
+        ],
+        "stop": {
+          "tool": "swinir_50",
+          "level": "very low",
+          "reason": "below threshold (low)"
+        }
+      }
+    },
+    "elapsed_s": 20.1
+  },
+  "s3_rain": {
+    "sample_id": "s3_rain",
+    "gt": [
+      "rain"
+    ],
+    "perception": [
+      [
+        "motion blur",
+        "very low"
+      ],
+      [
+        "defocus blur",
+        "very low"
+      ],
+      [
+        "rain",
+        "very high"
+      ],
+      [
+        "haze",
+        "very low"
+      ],
+      [
+        "dark",
+        "very low"
+      ],
+      [
+        "noise",
+        "very low"
+      ],
+      [
+        "jpeg compression artifact",
+        "very low"
+      ]
+    ],
+    "plan": [
+      "deraining"
+    ],
+    "ok": true,
+    "experts": {
+      "deraining": {
+        "candidates": [
+          "xrestormer",
+          "restormer",
+          "mprnet"
+        ],
+        "stop": {
+          "tool": "restormer",
+          "level": "very low",
+          "reason": "below threshold (low)"
+        }
+      }
+    },
+    "elapsed_s": 19.2
+  },
+  "s4_lowres": {
+    "sample_id": "s4_lowres",
+    "gt": [
+      "low resolution"
+    ],
+    "perception": [
+      [
+        "motion blur",
+        "low"
+      ],
+      [
+        "defocus blur",
+        "very low"
+      ],
+      [
+        "rain",
+        "very low"
+      ],
+      [
+        "haze",
+        "very low"
+      ],
+      [
+        "dark",
+        "medium"
+      ],
+      [
+        "noise",
+        "very low"
+      ],
+      [
+        "jpeg compression artifact",
+        "very low"
+      ]
+    ],
+    "plan": [
+      "super-resolution",
+      "brightening"
+    ],
+    "ok": true,
+    "experts": {
+      "super-resolution": {
+        "candidates": [
+          "swinir_psnr",
+          "xrestormer",
+          "hat"
+        ],
+        "compare": {
+          "candidates": [
+            [
+              "swinir_psnr",
+              "low"
+            ],
+            [
+              "xrestormer",
+              "low"
+            ],
+            [
+              "hat",
+              "low"
+            ]
+          ],
+          "best": "hat"
+        }
+      },
+      "brightening": {
+        "candidates": [
+          "gamma_correction",
+          "histogram_equalization",
+          "constant_shift"
+        ],
+        "stop": {
+          "tool": "constant_shift",
+          "level": "very low",
+          "reason": "below threshold (low)"
+        }
+      }
+    },
+    "elapsed_s": 32.5
+  },
+  "c1_noise_jpeg": {
+    "sample_id": "c1_noise_jpeg",
+    "gt": [
+      "noise",
+      "jpeg compression artifact"
+    ],
+    "perception": [
+      [
+        "motion blur",
+        "very low"
+      ],
+      [
+        "defocus blur",
+        "very low"
+      ],
+      [
+        "rain",
+        "very low"
+      ],
+      [
+        "haze",
+        "very low"
+      ],
+      [
+        "dark",
+        "very low"
+      ],
+      [
+        "noise",
+        "very high"
+      ],
+      [
+        "jpeg compression artifact",
+        "high"
+      ]
+    ],
+    "plan": [
+      "jpeg compression artifact removal",
+      "denoising"
+    ],
+    "ok": true,
+    "experts": {
+      "jpeg compression artifact removal": {
+        "candidates": [
+          "fbcnn_5",
+          "fbcnn_blind"
+        ],
+        "stop": {
+          "tool": "fbcnn_5",
+          "level": "very low",
+          "reason": "below threshold (low)"
+        }
+      },
+      "denoising": {
+        "candidates": [
+          "swinir_15",
+          "restormer",
+          "xrestormer"
+        ],
+        "stop": {
+          "tool": "swinir_15",
+          "level": "very low",
+          "reason": "below threshold (low)"
+        }
+      }
+    },
+    "elapsed_s": 31.3
+  },
+  "c2_rain_jpeg": {
+    "sample_id": "c2_rain_jpeg",
+    "gt": [
+      "rain",
+      "jpeg compression artifact"
+    ],
+    "perception": [
+      [
+        "motion blur",
+        "very low"
+      ],
+      [
+        "defocus blur",
+        "very low"
+      ],
+      [
+        "rain",
+        "medium"
+      ],
+      [
+        "haze",
+        "very low"
+      ],
+      [
+        "dark",
+        "very low"
+      ],
+      [
+        "noise",
+        "very low"
+      ],
+      [
+        "jpeg compression artifact",
+        "medium"
+      ]
+    ],
+    "plan": [
+      "jpeg compression artifact removal",
+      "deraining"
+    ],
+    "ok": true,
+    "experts": {
+      "jpeg compression artifact removal": {
+        "candidates": [
+          "swinir_40",
+          "fbcnn_blind"
+        ],
+        "stop": {
+          "tool": "swinir_40",
+          "level": "very low",
+          "reason": "below threshold (low)"
+        }
+      },
+      "deraining": {
+        "candidates": [
+          "xrestormer",
+          "restormer",
+          "mprnet"
+        ],
+        "stop": {
+          "tool": "restormer",
+          "level": "very low",
+          "reason": "below threshold (low)"
+        }
+      }
+    },
+    "elapsed_s": 38.0
+  },
+  "c3_haze_lowres": {
+    "sample_id": "c3_haze_lowres",
+    "gt": [
+      "haze",
+      "low resolution"
+    ],
+    "perception": [
+      [
+        "motion blur",
+        "very low"
+      ],
+      [
+        "defocus blur",
+        "very low"
+      ],
+      [
+        "rain",
+        "very low"
+      ],
+      [
+        "haze",
+        "very high"
+      ],
+      [
+        "dark",
+        "very low"
+      ],
+      [
+        "noise",
+        "very low"
+      ],
+      [
+        "jpeg compression artifact",
+        "very low"
+      ]
+    ],
+    "plan": [
+      "super-resolution",
+      "dehazing"
+    ],
+    "ok": true,
+    "experts": {
+      "super-resolution": {
+        "candidates": [
+          "swinir_psnr",
+          "xrestormer"
+        ],
+        "compare": {
+          "candidates": [
+            [
+              "swinir_psnr",
+              "medium"
+            ],
+            [
+              "xrestormer",
+              "low"
+            ]
+          ],
+          "best": "swinir_psnr"
+        }
+      },
+      "dehazing": {
+        "candidates": [
+          "xrestormer"
+        ],
+        "stop": {
+          "tool": "xrestormer",
+          "level": "very low",
+          "reason": "below threshold (low)"
+        }
+      }
+    },
+    "elapsed_s": 29.8
+  },
+  "c4_rain_noise": {
+    "sample_id": "c4_rain_noise",
+    "gt": [
+      "rain",
+      "noise"
+    ],
+    "perception": [
+      [
+        "motion blur",
+        "very low"
+      ],
+      [
+        "defocus blur",
+        "very low"
+      ],
+      [
+        "rain",
+        "medium"
+      ],
+      [
+        "haze",
+        "very low"
+      ],
+      [
+        "dark",
+        "very low"
+      ],
+      [
+        "noise",
+        "very high"
+      ],
+      [
+        "jpeg compression artifact",
+        "very low"
+      ]
+    ],
+    "plan": [
+      "denoising",
+      "deraining"
+    ],
+    "ok": true,
+    "experts": {
+      "denoising": {
+        "candidates": [
+          "swinir_50",
+          "restormer",
+          "mprnet"
+        ],
+        "stop": {
+          "tool": "swinir_50",
+          "level": "very low",
+          "reason": "below threshold (low)"
+        }
+      },
+      "deraining": {
+        "candidates": [
+          "xrestormer",
+          "restormer",
+          "mprnet"
+        ],
+        "stop": {
+          "tool": "xrestormer",
+          "level": "very low",
+          "reason": "below threshold (low)"
+        }
+      }
+    },
+    "elapsed_s": 31.5
+  },
+  "t1_noise_motionblur": {
+    "sample_id": "t1_noise_motionblur",
+    "gt": [
+      "motion blur",
+      "noise"
+    ],
+    "perception": [
+      [
+        "motion blur",
+        "very low"
+      ],
+      [
+        "defocus blur",
+        "medium"
+      ],
+      [
+        "rain",
+        "very low"
+      ],
+      [
+        "haze",
+        "very low"
+      ],
+      [
+        "dark",
+        "very low"
+      ],
+      [
+        "noise",
+        "medium"
+      ],
+      [
+        "jpeg compression artifact",
+        "very low"
+      ]
+    ],
+    "plan": [
+      "denoising"
+    ],
+    "ok": true,
+    "experts": {
+      "denoising": {
+        "candidates": [
+          "restormer",
+          "mprnet",
+          "xrestormer"
+        ],
+        "stop": {
+          "tool": "mprnet",
+          "level": "very low",
+          "reason": "below threshold (low)"
+        }
+      }
+    },
+    "elapsed_s": 17.9
+  },
+  "t2_rain_haze": {
+    "sample_id": "t2_rain_haze",
+    "gt": [
+      "haze",
+      "rain"
+    ],
+    "perception": [
+      [
+        "motion blur",
+        "very low"
+      ],
+      [
+        "defocus blur",
+        "very low"
+      ],
+      [
+        "rain",
+        "medium"
+      ],
+      [
+        "haze",
+        "high"
+      ],
+      [
+        "dark",
+        "very low"
+      ],
+      [
+        "noise",
+        "very low"
+      ],
+      [
+        "jpeg compression artifact",
+        "very low"
+      ]
+    ],
+    "plan": [
+      "dehazing",
+      "deraining"
+    ],
+    "ok": true,
+    "experts": {
+      "dehazing": {
+        "candidates": [
+          "xrestormer"
+        ],
+        "stop": {
+          "tool": "xrestormer",
+          "level": "very low",
+          "reason": "below threshold (low)"
+        }
+      },
+      "deraining": {
+        "candidates": [
+          "xrestormer",
+          "restormer",
+          "mprnet"
+        ],
+        "stop": {
+          "tool": "xrestormer",
+          "level": "very low",
+          "reason": "below threshold (low)"
+        }
+      }
+    },
+    "elapsed_s": 70.8
+  },
+  "x1_rain_noise_jpeg": {
+    "sample_id": "x1_rain_noise_jpeg",
+    "gt": [
+      "rain",
+      "noise",
+      "jpeg compression artifact"
+    ],
+    "perception": [
+      [
+        "motion blur",
+        "very low"
+      ],
+      [
+        "defocus blur",
+        "very low"
+      ],
+      [
+        "rain",
+        "high"
+      ],
+      [
+        "haze",
+        "very low"
+      ],
+      [
+        "dark",
+        "very low"
+      ],
+      [
+        "noise",
+        "very high"
+      ],
+      [
+        "jpeg compression artifact",
+        "very high"
+      ]
+    ],
+    "plan": [
+      "jpeg compression artifact removal",
+      "denoising",
+      "deraining"
+    ],
+    "ok": true,
+    "experts": {
+      "jpeg compression artifact removal": {
+        "candidates": [
+          "fbcnn_5",
+          "fbcnn_blind",
+          "swinir_40"
+        ],
+        "stop": {
+          "tool": "fbcnn_5",
+          "level": "very low",
+          "reason": "below threshold (low)"
+        }
+      },
+      "denoising": {
+        "skip_below": "very low"
+      },
+      "deraining": {
+        "candidates": [
+          "xrestormer",
+          "restormer",
+          "mprnet"
+        ],
+        "compare": {
+          "candidates": [
+            [
+              "xrestormer",
+              "medium"
+            ],
+            [
+              "restormer",
+              "medium"
+            ],
+            [
+              "mprnet",
+              "medium"
+            ]
+          ],
+          "best": "mprnet"
+        }
+      }
+    },
+    "elapsed_s": 34.4
+  },
+  "x2_motionblur_noise_lowres": {
+    "sample_id": "x2_motionblur_noise_lowres",
+    "gt": [
+      "motion blur",
+      "noise",
+      "low resolution"
+    ],
+    "perception": [
+      [
+        "motion blur",
+        "very low"
+      ],
+      [
+        "defocus blur",
+        "very low"
+      ],
+      [
+        "rain",
+        "very low"
+      ],
+      [
+        "haze",
+        "very low"
+      ],
+      [
+        "dark",
+        "very low"
+      ],
+      [
+        "noise",
+        "medium"
+      ],
+      [
+        "jpeg compression artifact",
+        "very low"
+      ]
+    ],
+    "plan": [
+      "denoising",
+      "super-resolution"
+    ],
+    "ok": true,
+    "experts": {
+      "denoising": {
+        "candidates": [
+          "restormer",
+          "xrestormer",
+          "mprnet"
+        ],
+        "stop": {
+          "tool": "restormer",
+          "level": "very low",
+          "reason": "below threshold (low)"
+        }
+      },
+      "super-resolution": {
+        "candidates": [
+          "diffbir",
+          "swinir_gan",
+          "hat"
+        ],
+        "tool_errors": [
+          {
+            "tool": "diffbir",
+            "error": "RuntimeError: Tool diffbir failed (exit 1): 27, in decorate_context\n    return func(*args, **kwargs)\n  File \"/root/autodl-tmp/AgenticIR/executor/super_resolution/tools/DiffBIR/model/spaced_sampler.py\", line 525, in sample\n    \"c_latent\": [self.model.apply_condition_encoder(cond_img)],\n  File \"/root/autodl-tmp/AgenticIR/executor/super_resolution/tools/DiffBIR/model/cldm.py\", line 322, in apply_condition_encoder\n    c_latent_meanvar = self.cond_encoder(control * 2 - 1)\n  File \"/root/miniconda3/envs/diffbir/lib/python3.10/site-packages/torch/nn/modules/module.py\", line 1194, in _call_impl\n    return forward_call(*input, **kwargs)\n  File \"/root/miniconda3/envs/diffbir/lib/python3.10/site-packages/torch/nn/modules/container.py\", line 204, in forward\n    input = module(input)\n  File \"/root/miniconda3/envs/diffbir/lib/python3.10/site-packages/torch/nn/modules/module.py\", line 1194, in _call_impl\n    return forward_call(*input, **kwargs)\n  File \"/root/autodl-tmp/AgenticIR/executor/super_resolution/tools/DiffBIR/ldm/modules/diffusionmodules/model.py\", line 529, in forward\n    h = self.down[i_level].block[i_block](hs[-1], temb)\n  File \"/root/miniconda3/envs/diffbir/lib/python3.10/site-packages/torch/nn/modules/module.py\", line 1194, in _call_impl\n    return forward_call(*input, **kwargs)\n  File \"/root/autodl-tmp/AgenticIR/executor/super_resolution/tools/DiffBIR/ldm/modules/diffusionmodules/model.py\", line 134, in forward\n    h = nonlinearity(h)\n  File \"/root/autodl-tmp/AgenticIR/executor/super_resolution/tools/DiffBIR/ldm/modules/diffusionmodules/model.py\", line 45, in nonlinearity\n    return x*torch.sigmoid(x)\ntorch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 352.00 MiB (GPU 0; 39.49 GiB total capacity; 7.85 GiB already allocated; 62.38 MiB free; 7.93 GiB reserved in total by PyTorch) If reserved memory is >> allocated memory try setting max_split_size_mb to avoid fragmentation.  See documentation for Memory Management and PYTORCH_CUDA_ALLOC_CONF\n\rSpaced Sampler:   0%|          | 0/50 [00:00<?, ?it/s]"
+          }
+        ],
+        "compare": {
+          "candidates": [
+            [
+              "swinir_gan",
+              "low"
+            ],
+            [
+              "hat",
+              "medium"
+            ]
+          ],
+          "best": "swinir_gan"
+        }
+      }
+    },
+    "elapsed_s": 224.7
+  }
+}

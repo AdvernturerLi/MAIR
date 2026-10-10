@@ -140,6 +140,21 @@ def test_select_tools_passes_instruction_to_prompt(tmp_path):
     assert "medium" in call["prompt"]
 
 
+def test_lowres_expert_does_not_skip_on_low_blur_proxy(tmp_path):
+    # M09：低分辨率用 blur 代理，severity=very low 也不应跳过（尺寸已确认需超分）
+    t1 = FakeTool("xrestormer")
+    t2 = FakeTool("hat")
+    expert = _expert(
+        tmp_path, [t1, t2], levels=["very low", "very low"],
+        gpt4_responses=[json.dumps({"thought": "t", "candidates": ["xrestormer"]})],
+        subtask="super-resolution", degradation="low resolution",
+    )
+    img = _img(tmp_path)
+    out = expert.restore(img, tmp_path / "work")
+    assert len(expert.gpt4.calls) == 1          # 进入选工具阶段，未跳过
+    assert "tool-xrestormer" in str(out)
+
+
 def test_single_tool_skips_smart_selection(tmp_path):
     # M07：单工具任务直接返回该工具，不假装智能候选选择
     t1 = FakeTool("xrestormer")

@@ -21,6 +21,18 @@ def test_weights_present_specific_files(tmp_path):
     assert t2._weights_present() is False
 
 
+def test_restormer_required_weight_files():
+    from executor.multitask_tools import Restormer
+    assert str(Restormer("defocus_deblurring").required_weight_files[0]) == \
+        "Defocus_Deblurring/pretrained_models/single_image_defocus_deblurring.pth"
+    assert str(Restormer("deraining").required_weight_files[0]) == \
+        "Deraining/pretrained_models/deraining.pth"
+    assert str(Restormer("denoising").required_weight_files[0]) == \
+        "Denoising/pretrained_models/real_denoising.pth"
+    assert str(Restormer("motion_deblurring").required_weight_files[0]) == \
+        "Motion_Deblurring/pretrained_models/motion_deblurring.pth"
+
+
 def test_available_tools_filters_by_availability(monkeypatch):
     # M07：可用工具由运行时可用性检查决定，而非硬编码白名单
     def fake_available(self):

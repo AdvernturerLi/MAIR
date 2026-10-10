@@ -145,6 +145,21 @@ def test_plan_skips_sr_without_tools(monkeypatch, tmp_path):
     assert plan == []
 
 
+def test_order_within_stage_falls_back_on_llm_failure(monkeypatch, tmp_path):
+    # P2：LLM 阶段内排序失败时回退到严重度降序，不中断整条流程
+    monkeypatch.setattr("scheduler.available_tools", lambda s: ["t"])
+
+    class BoomGPT4:
+        def __call__(self, *a, **k):
+            raise RuntimeError("Too many format-check failures")
+
+    img = _make_img(tmp_path)
+    evaluation = [("noise", "medium"), ("motion blur", "high")]
+    s = _scheduler(tmp_path, evaluation, fake_gpt4=BoomGPT4(), with_retrieval=False)
+    plan = s.plan(img, evaluation)
+    assert plan == ["motion deblurring", "denoising"]  # high 先于 medium
+
+
 def test_plan_dedups_duplicate_tasks(monkeypatch, tmp_path):
     # 计划不能含重复任务（P2）；构造 duplicate 退化输入也应去重
     monkeypatch.setattr("scheduler.available_tools", lambda s: ["t"])

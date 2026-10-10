@@ -180,7 +180,9 @@ class Expert:
         self._record("fine_perception", level=level, input=str(img_path))
 
         # 输入已低于阈值：明确跳过（P2），不默认无条件处理却称"按反思停止"
-        if self._below_threshold(level):
+        # 例外：低分辨率用 blur 代理评估 severity（不可靠），而尺寸启发式已确认需要
+        # 超分，故 super-resolution 不做"低于阈值跳过"，避免低分辨率图被误跳过（M09）
+        if self.degradation != "low resolution" and self._below_threshold(level):
             self._record("skip_below_threshold", level=level, threshold=self.stop_threshold)
             print(f"[Expert] {self.subtask} 输入 level={level} 已低于阈值 "
                   f"{self.stop_threshold}，跳过", flush=True)

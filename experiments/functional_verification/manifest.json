@@ -1,0 +1,132 @@
+{
+  "s1_jpeg": {
+    "hq": "001.png",
+    "degradations": [
+      "jpeg compression artifact"
+    ],
+    "size": [
+      680,
+      1024
+    ]
+  },
+  "s2_noise": {
+    "hq": "001.png",
+    "degradations": [
+      "noise"
+    ],
+    "size": [
+      680,
+      1024
+    ]
+  },
+  "s3_rain": {
+    "hq": "001.png",
+    "degradations": [
+      "rain"
+    ],
+    "size": [
+      680,
+      1024
+    ]
+  },
+  "s4_lowres": {
+    "hq": "001.png",
+    "degradations": [
+      "low resolution"
+    ],
+    "size": [
+      170,
+      256
+    ]
+  },
+  "c1_noise_jpeg": {
+    "hq": "001.png",
+    "degradations": [
+      "noise",
+      "jpeg compression artifact"
+    ],
+    "size": [
+      680,
+      1024
+    ]
+  },
+  "c2_rain_jpeg": {
+    "hq": "001.png",
+    "degradations": [
+      "rain",
+      "jpeg compression artifact"
+    ],
+    "size": [
+      680,
+      1024
+    ]
+  },
+  "c3_haze_lowres": {
+    "hq": "001.png",
+    "degradations": [
+      "haze",
+      "low resolution"
+    ],
+    "size": [
+      170,
+      256
+    ]
+  },
+  "c4_rain_noise": {
+    "hq": "001.png",
+    "degradations": [
+      "rain",
+      "noise"
+    ],
+    "size": [
+      680,
+      1024
+    ]
+  },
+  "t1_noise_motionblur": {
+    "hq": "001.png",
+    "degradations": [
+      "motion blur",
+      "noise"
+    ],
+    "size": [
+      680,
+      1024
+    ]
+  },
+  "t2_rain_haze": {
+    "hq": "001.png",
+    "degradations": [
+      "haze",
+      "rain"
+    ],
+    "size": [
+      680,
+      1024
+    ]
+  },
+  "x1_rain_noise_jpeg": {
+    "hq": "001.png",
+    "degradations": [
+      "rain",
+      "noise",
+      "jpeg compression artifact"
+    ],
+    "size": [
+      680,
+      1024
+    ]
+  },
+  "x2_motionblur_noise_lowres": {
+    "hq": "001.png",
+    "degradations": [
+      "motion blur",
+      "noise",
+      "low resolution"
+    ],
+    "size": [
+      170,
+      256
+    ]
+  }
+}

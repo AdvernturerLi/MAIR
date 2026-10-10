@@ -1,0 +1,72 @@
+dataset: mair_benchmark_v1
+source:
+  hq_dir: /root/autodl-tmp/MiO_test/original/GT
+  depth_dir: /root/autodl-tmp/MiO_test/original/depth/LR_tensor
+split_seed: 42
+master_seed: 20261010
+n_validation_hq: 10
+n_test_hq: 20
+validation_hq_ids:
+- 084
+- '054'
+- '071'
+- '046'
+- '045'
+- '040'
+- '023'
+- 081
+- '011'
+- '001'
+test_hq_ids:
+- 019
+- '031'
+- '074'
+- '034'
+- 091
+- '005'
+- '077'
+- 078
+- '013'
+- '032'
+- '056'
+- 089
+- '027'
+- '043'
+- '070'
+- '016'
+- '041'
+- 097
+- '010'
+- '073'
+naming_note:
+  blur: motion blur
+  low-light: dark
+  low-resolution: lr(0.25x)
+combinations:
+  noise+blur:
+  - motion blur
+  - noise
+  rain+haze:
+  - rain
+  - haze
+  low-light+noise:
+  - dark
+  - noise
+  jpeg+noise:
+  - noise
+  - jpeg compression artifact
+  blur+low-resolution:
+  - motion blur
+  - low resolution
+  haze+low-resolution:
+  - haze
+  - low resolution
+  rain+blur:
+  - rain
+  - motion blur
+  rain+noise+low-resolution:
+  - rain
+  - noise
+  - low resolution
+seed_determined_internal_params: motion blur 的 angle、rain 的 length/angle/noise 由函数内部
+  np.random 抽取，受 random_seed 控制（重跑同 seed 可复现）

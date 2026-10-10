@@ -1,5 +1,6 @@
 import os
 import shutil
+from pathlib import Path
 
 from ..tool import Tool
 from ..multitask_tools import *
@@ -18,6 +19,8 @@ class IFAN(Tool):
             work_dir="IFAN",
             script_rel_path='run.py'
         )
+        # 权重文件（相对 work_dir），用于 M07 可用性检查
+        self.required_weight_files = [Path("ckpt/IFAN_44.pytorch")]
 
     def _preprocess(self):
         """Requires parameter `input_dir: Path`. IFAN requires that the option `input_dir` should contain a directory {data} (i.e., 'random' here) that contains the input image."""
@@ -85,9 +88,11 @@ class DRBNet(Tool):
             work_dir="DRBNet",
             script_rel_path='run.py'
         )
+        # 权重文件（相对 work_dir），用于 M07 可用性检查
+        self.required_weight_files = [Path("ckpts/single/single_image_defocus_deblurring.pth")]
 
     def _get_cmd_opts(self) -> list[str]:
-        """Requires parameter `input_dir: Path` and `output_dir: Path`"""        
+        """Requires parameter `input_dir: Path` and `output_dir: Path`"""
         return [
             "--eval_data", "CUHK",
             "--dataroot_cuhk", self.input_dir,

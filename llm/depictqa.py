@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import requests
 import logging
 from typing import Optional
@@ -9,17 +10,30 @@ from utils.custom_types import Degradation, Level
 
 
 class DepictQA(BaseLLM):
-    """Parameters when called: img_path_lst, task (eval_degradation or comp_quality), degradations (if task is eval_degradation)."""
+    """Parameters when called: img_path_lst, task (eval_degradation or comp_quality), degradations (if task is eval_degradation).
+
+    感知/反思模型（论文：Vicuna-v1.5-7B 微调的 DepictQA）。本地以 HTTP 服务形式
+    部署（5001=退化评估、5002=质量比较），调用带超时。
+    """
 
     def __init__(
         self,
         log_path: Optional[Path | str] = None,
         logger: Optional[logging.Logger] = None,
         silent: bool = False,
+        eval_url: str = "http://127.0.0.1:5001/evaluate_degradation",
+        compare_url: str = "http://127.0.0.1:5002/compare_quality",
+        timeout: float = 120.0,
+        low_res_as_blur: bool = True,
     ):
         super().__init__(
             log_path=log_path, logger=logger, silent=silent
         )  # set attributes: cfg, logger, silent
+        self.eval_url = eval_url
+        self.compare_url = compare_url
+        self.timeout = timeout
+        # 超分专家用 "blur" 严重度代理 "低分辨率"（启发式，非论文正文，见 M09）
+        self.low_res_as_blur = low_res_as_blur
 
     def query(
         self,
@@ -55,7 +69,14 @@ class DepictQA(BaseLLM):
             degradations_lst = all_degradations
         else:
             if degradation == "low resolution":
-                degradation = "blur"
+                if self.low_res_as_blur:
+                    degradation = "blur"
+                else:
+                    # 无 blur 代理时，DepictQA 无法评估"低分辨率"，退回中性默认
+                    # "medium"（非空结果，避免下游 IndexError），并如实记录
+                    return depictqa_evaluate_degradation_prompt.format(
+                        degradation=degradation
+                    ), json.dumps([["low resolution", "medium"]])
             else:
                 assert isinstance(
                     degradation, Degradation
@@ -66,31 +87,33 @@ class DepictQA(BaseLLM):
             degradations_lst = [degradation]
 
         levels: set[Level] = {"very low", "low", "medium", "high", "very high"}
-        res: list[tuple[Degradation, Level]] = []
+        res: list[list[str]] = []
         for degradation in degradations_lst:
             prompt = depictqa_evaluate_degradation_prompt.format(
                 degradation=degradation
             )
-            url = "http://127.0.0.1:5001/evaluate_degradation"
             payload = {"imageA_path": img.resolve(), "prompt": prompt}
-            rsp: str = requests.post(url, data=payload).json()["answer"]
+            rsp: str = requests.post(
+                self.eval_url, data=payload, timeout=self.timeout
+            ).json()["answer"]
             assert rsp in levels, f"Unexpected response from DepictQA: {list(rsp)}"
-            res.append((degradation, rsp))
+            res.append([degradation, rsp])
 
         prompt_to_display = depictqa_evaluate_degradation_prompt.format(
             degradation=degradations_lst
         )
-        return prompt_to_display, str(res)
+        return prompt_to_display, json.dumps(res)
 
     def compare_img_qual(self, img1: Path, img2: Path) -> tuple[str, str]:
         prompt = depictqa_compare_prompt
-        url = "http://127.0.0.1:5002/compare_quality"
         payload = {
             "imageA_path": img1.resolve(),
             "imageB_path": img2.resolve(),
             "prompt": prompt
         }
-        rsp: str = requests.post(url, data=payload).json()["answer"]
+        rsp: str = requests.post(
+            self.compare_url, data=payload, timeout=self.timeout
+        ).json()["answer"]
 
         if "A" in rsp and "B" not in rsp:
             choice = "former"

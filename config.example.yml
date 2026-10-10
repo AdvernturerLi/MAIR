@@ -1,7 +1,18 @@
 # 复制本文件为 config.yml，并填入你的 API key。
-# MAIR 走 OpenAI 兼容接口，默认用 DeepSeek。
+# 也可用环境变量 OPENAI_API_KEY / OPENAI_BASE_URL / OPENAI_MODEL 覆盖本文件。
+# MAIR 走 OpenAI 兼容接口。默认 DeepSeek（资源受限替代档位）；
+# 论文同款（GPT-4o）请用 config.gpt4o.example.yml。
 OPENAI_API_KEY: "在此填入你的-API-KEY"
 OPENAI_BASE_URL: "https://api.deepseek.com"
 OPENAI_MODEL: "deepseek-v4-flash-vision-exp"
 MAX_TOKENS: 8192
 TEMPERATURE: 0.0
+
+# —— MAIR 运行参数（会写入每张图的轨迹）——
+# 专家停止阈值：严重度严格低于该值即停（论文示例为 low → 实际 very low 才停）
+STOP_THRESHOLD: "low"
+# 低分辨率尺寸启发式（来源 AgenticIR，非论文正文，见 M09）
+USE_SIZE_HEURISTIC_FOR_SR: true
+LOW_RES_MAX_SIDE: 300
+# 超分专家用 DepictQA "blur" 严重度代理"低分辨率"（启发式，非论文正文，见 M09）
+LOW_RES_AS_BLUR: true

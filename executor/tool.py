@@ -5,6 +5,13 @@ import time
 from typing import Optional
 
 
+# 权重文件扩展名（用于 M07 可用性检查）
+WEIGHT_EXTS = {".pth", ".ckpt", ".npz", ".pytorch", ".safetensors", ".pt", ".onnx"}
+
+# 工具可用性缓存（工具是 executor 单例，进程内稳定）
+_availability_cache: dict = {}
+
+
 class Tool:
     """Abstract class for a tool.
 
@@ -25,6 +32,8 @@ class Tool:
         self.subtask: str = subtask
         self.work_dir: Optional[Path] = None
         self.script_path: Optional[Path] = None
+        # 具体权重文件（相对 work_dir），用于 M07 可用性检查；为空则退回"任意权重"检查
+        self.required_weight_files: list[Path] = []
         if work_dir is not None:
             assert script_rel_path is not None, "If `work_dir` is provided, `script_rel_path` should also be provided."
             self.work_dir: Path = Path().resolve() / 'executor' / subtask / 'tools' / work_dir
@@ -64,8 +73,13 @@ class Tool:
     def _invoke(self) -> None:
         self._preprocess()
         cmd = self._get_cmd()
-        subprocess.run(cmd, cwd=self.work_dir, shell=True, check=True,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        proc = subprocess.run(cmd, cwd=self.work_dir, shell=True,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if proc.returncode != 0:
+            stderr = proc.stderr.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(
+                f"Tool {self.tool_name} failed (exit {proc.returncode}): {stderr[-2000:]}"
+            )
         self._postprocess()
 
     def _get_cmd(self) -> str:
@@ -77,9 +91,63 @@ class Tool:
         for opt in opts:
             cmd += f" '{opt}'"
         return cmd
-    
+
     def _get_cmd_opts(self, *args) -> list[str]:
         raise NotImplementedError
+
+    # —— 可用性检查（M07）——
+    @staticmethod
+    def _exists(p: Path) -> bool:
+        """exists() 的安全包装：无权限/OSError 视为不存在（不崩溃）。"""
+        try:
+            return Path(p).exists()
+        except (PermissionError, OSError):
+            return False
+
+    def availability(self) -> dict:
+        """返回 {code, env, weights, available}：脚本代码、conda 环境、权重是否齐备。
+
+        纯 Python 工具（如 brightening）在主进程内运行，无外部脚本/环境/权重依赖。
+        """
+        key = id(self)
+        if key in _availability_cache:
+            return _availability_cache[key]
+        if self.script_path is None:
+            info = {"code": True, "env": True, "weights": True, "available": True}
+        else:
+            code = self._exists(self.script_path)
+            env_name = self.tool_name.split("_")[0]
+            env = self._exists(Path(f"/root/miniconda3/envs/{env_name}/bin/python"))
+            weights = self._weights_present()
+            info = {"code": code, "env": env, "weights": weights,
+                    "available": code and env and weights}
+        _availability_cache[key] = info
+        return info
+
+    def available(self) -> bool:
+        return self.availability()["available"]
+
+    def _weights_present(self) -> bool:
+        """工具是否具备权重：声明了 required_weight_files 则逐个校验，否则
+        退回"目录下存在任意权重文件"（此时同 work_dir 多变体工具可能被高估）。"""
+        if self.work_dir is None:
+            return False
+        try:
+            if not self.work_dir.exists():
+                return False
+            if self.required_weight_files:
+                return all(
+                    self._exists(self.work_dir / f) for f in self.required_weight_files
+                )
+            for p in self.work_dir.rglob("*"):
+                try:
+                    if p.is_file() and p.suffix.lower() in WEIGHT_EXTS:
+                        return True
+                except (PermissionError, OSError):
+                    continue
+        except (PermissionError, OSError):
+            return False
+        return False
 
     def _preprocess(self):
         """May be needed by the specific tool."""        

@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from ..tool import Tool
 from ..multitask_tools import *
@@ -36,6 +37,8 @@ class RIDCP(Tool):
             work_dir="RIDCP_dehazing",
             script_rel_path="inference_ridcp.py"
         )
+        # 权重文件（相对 work_dir），用于 M07 可用性检查
+        self.required_weight_files = [Path("pretrained_models/pretrained_RIDCP.pth")]
 
     def _get_cmd_opts(self) -> list[str]:
         return [

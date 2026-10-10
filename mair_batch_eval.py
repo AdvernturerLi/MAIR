@@ -9,6 +9,7 @@ from skimage.metrics import structural_similarity as ssim_func
 
 from scheduler import Scheduler
 from expert import Expert
+from trajectory import Trajectory
 
 COMBOS = {
     "rain+haze": ["001", "002"],
@@ -38,14 +39,17 @@ def compute_psnr_ssim(img_path, ref_path):
 
 
 def run_mair(lq_path: Path, out_dir: Path):
-    """跑 MAIR 三阶段先验，返回 (result_path, plan)。"""
-    scheduler = Scheduler(config_path=Path("config.yml"), with_retrieval=False)
-    evaluation = scheduler.perceive(lq_path)
-    plan = scheduler.plan(lq_path, evaluation)
-
+    """跑 MAIR 三阶段先验，返回 (result_path, plan, evaluation)。"""
     if out_dir.exists():
         shutil.rmtree(out_dir)  # 清理上次残留，避免工具 precheck 报"输出目录非空"
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    trajectory = Trajectory(out_dir, input_path=lq_path)
+    scheduler = Scheduler(config_path=Path("config.yml"), with_retrieval=False,
+                          trajectory=trajectory)
+    evaluation = scheduler.perceive(lq_path)
+    plan = scheduler.plan(lq_path, evaluation)
+
     clean_input_dir = out_dir / "0-img"
     clean_input_dir.mkdir(parents=True, exist_ok=True)
     cur_img = clean_input_dir / "input.png"
@@ -53,14 +57,19 @@ def run_mair(lq_path: Path, out_dir: Path):
 
     for subtask in plan:
         degradation = scheduler.subtask_degra_dict[subtask]
-        expert = Expert(subtask, degradation, config_path=Path("config.yml"))
+        expert = Expert(subtask, degradation, config_path=Path("config.yml"),
+                        trajectory=trajectory)
         out = expert.restore(cur_img, out_dir)
         if out is None:
+            trajectory.record("abort", subtask=subtask, reason="expert returned None")
+            trajectory.save()
             return None, plan, evaluation
         cur_img = out
 
     final = out_dir / "result.png"
     shutil.copy(cur_img, final)
+    trajectory.record("final", result=str(final))
+    trajectory.save()
     return final, plan, evaluation
 
 

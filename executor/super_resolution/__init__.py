@@ -30,6 +30,11 @@ class DiffBIR(Tool):
             work_dir="DiffBIR",
             script_rel_path="inference.py"
         )
+        # 权重文件（相对 work_dir），用于 M07 可用性检查
+        self.required_weight_files = [
+            Path("weights/general_full_v1.ckpt"),
+            Path("weights/general_swinir_v1.ckpt"),
+        ]
 
     def _get_cmd_opts(self) -> list[str]:
         return [

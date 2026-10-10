@@ -1,4 +1,6 @@
 from pathlib import Path
+import json
+import os
 import requests
 import logging
 from typing import Callable, Optional
@@ -28,10 +30,14 @@ class GPT4(BaseLLM):
             silent=silent
         )  # set attributes: cfg, logger, silent
 
-        self.api_key = self.cfg["OPENAI_API_KEY"]
-        self.base_url = self.cfg.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+        # 凭据优先从环境变量读取，config 为回退（避免把 key 写死在文件里）
+        self.api_key = os.environ.get("OPENAI_API_KEY") or self.cfg["OPENAI_API_KEY"]
+        self.base_url = (
+            os.environ.get("OPENAI_BASE_URL")
+            or self.cfg.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
+        ).rstrip("/")
         if model is None:
-            self.model = self.cfg["OPENAI_MODEL"]
+            self.model = os.environ.get("OPENAI_MODEL") or self.cfg["OPENAI_MODEL"]
         else:
             self.model = model
         self.max_tokens = self.cfg["MAX_TOKENS"]
@@ -51,9 +57,11 @@ class GPT4(BaseLLM):
               img_path_lst: Optional[list[Path]] = None,
               prompt: str = "",
               format_check: Optional[Callable[[object], None]] = None,
+              max_format_retries: int = 5,
               ) -> tuple[str, str]:
         headers, payload = self._prepare_for_request(
             prompt, img_path_lst)
+        n_format_retries = 0
         while True:
             response = self._send_request(headers, payload)
 
@@ -65,6 +73,10 @@ class GPT4(BaseLLM):
             if format_check is not None:
                 valid, rsp_text = self._check_syntax(rsp_text, format_check)
                 if not valid:
+                    n_format_retries += 1
+                    if n_format_retries > max_format_retries:
+                        raise RuntimeError(
+                            "Too many format-check failures when querying LLM.")
                     continue
             return prompt, rsp_text
 
@@ -187,29 +199,35 @@ class GPT4(BaseLLM):
 
     def _check_syntax(self, rsp_text: str, format_check: Callable[[object], None]
                       ) -> tuple[bool, str]:
-        """Checks whether the response is a valid Python object and follows the specified format. 
-        If valid, returns the processed response (the valid response may be wrapped in something)."""
-        # Check if the response is a valid Python object
-        try:
-            obj = eval(rsp_text)
-        except:
-            # GPT may wrap the response in a code block
-            inner_rsp_text = rsp_text.strip("```").lstrip("json").strip()
-            try:
-                obj = eval(inner_rsp_text)
-                rsp_text = inner_rsp_text
-            except:
-                self._log("Failed to parse the response:", level='warning')
-                self._log(rsp_text, level='warning')
-                return False, ""
-        # Check if the response follows the specified format
+        """安全解析 LLM 输出（JSON 优先，替换原 eval），并做格式校验。
+
+        返回 (是否通过, 规范化后的 JSON 文本)，供调用方 json.loads。
+        """
+        obj = self._safe_parse_json(rsp_text)
+        if obj is None:
+            self._log("Failed to parse the response as JSON:", level='warning')
+            self._log(rsp_text, level='warning')
+            return False, ""
         try:
             format_check(obj)
         except AssertionError as e:
             self._log(f"Failed to pass the format check: {e}", level='warning')
             self._log(f"Response: {obj}", level='warning')
             return False, ""
-        return True, rsp_text
+        return True, json.dumps(obj)
+
+    @staticmethod
+    def _safe_parse_json(text: str):
+        """把 LLM 输出解析为 JSON 对象；支持被 ```json 包裹的情况。"""
+        candidates = [text, text.strip().strip("`").lstrip("json").lstrip("JSON").strip()]
+        for candidate in candidates:
+            try:
+                obj = json.loads(candidate)
+                if isinstance(obj, (dict, list)):
+                    return obj
+            except Exception:
+                continue
+        return None
     
     def _post_process(self):
         """Logs the token usage and cost."""        

@@ -9,6 +9,7 @@
   note   —— 特性/副作用
 """
 from utils.custom_types import Subtask
+from executor import executor
 
 # subtask → 工具表单列表
 REGISTRY: dict[Subtask, list[dict]] = {
@@ -64,21 +65,23 @@ REGISTRY: dict[Subtask, list[dict]] = {
 }
 
 
-# 与 AgenticIR batch_eval.py 一致的可用退化（排除 defocus blur/dark，其工具权重未部署或非真实模型）
-WORKING_DEGRADATIONS = {
-    "low resolution", "noise", "motion blur", "haze", "rain",
-    "jpeg compression artifact",
-}
+# 注意：不再维护硬编码白名单（M07）。运行时以 available_tools() 的
+# 「代码 + 环境 + 权重」可用性检查为准，新增工具经检查即可被选择，
+# 不需要悄悄改白名单。
 
-# 与 AgenticIR batch_eval.py 一致的可用工具（排除权重缺失/未部署的 dehazeformer/ridcp/drbnet/ifan/diffbir/maxim 等）
-WORKING_TOOLS: dict[Subtask, list[str]] = {
-    "deraining": ["xrestormer", "restormer", "mprnet"],
-    "super-resolution": ["xrestormer", "swinir_gan", "hat"],
-    "denoising": ["xrestormer"],
-    "motion deblurring": ["xrestormer"],
-    "dehazing": ["xrestormer"],
-    "jpeg compression artifact removal": ["fbcnn_blind", "fbcnn_5", "fbcnn_90"],
-}
+
+def available_tools(subtask: Subtask) -> list[str]:
+    """某 subtask 在注册表里有表单、且实际可用（代码+环境+权重）的工具名列表。
+
+    按注册表顺序返回，作为专家选工具与调度器判定退化是否可处理的唯一来源。
+    """
+    names = tool_names(subtask)
+    result = []
+    for t in executor.toolbox_router.get(subtask, []):
+        if t.tool_name in names and t.available():
+            result.append(t.tool_name)
+    result.sort(key=lambda n: names.index(n))
+    return result
 
 
 def registry_text(subtask: Subtask) -> str:

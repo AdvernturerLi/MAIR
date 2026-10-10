@@ -115,6 +115,8 @@ class SwinIR(Tool):
         }
         self.opt_task, opt_model_names = opt_dict[subtask]
         self.model_name = opt_model_names[pretrained_on]
+        # 权重文件（相对 work_dir），区分 GAN/PSNR/15/50/40 变体（M07）
+        self.required_weight_files = [Path(f"model_zoo/swinir/{self.model_name}")]
 
     def _get_cmd_opts(self) -> list[str]:
         """Requires parameter `input_dir: Path`, `output_dir: Path`, `opt_task: str`, and `model_name: str`."""
@@ -228,6 +230,8 @@ class MAXIM(Tool):
             # 'retouching': ('Enhancement', 'maxim_ckpt_Enhancement_FiveK_checkpoint.npz')
         }
         self.opt_task, self.opt_ckpt_name = opt_dict[subtask]
+        # 权重文件（相对 work_dir），MAXIM 各任务 ckpt 不同（M07）
+        self.required_weight_files = [Path(f"maxim/pretrained_models/{self.opt_ckpt_name}")]
 
     def _preprocess(self):
         """Requires parameter `input_dir: Path`. MAXIM requires that the option `input_dir` should contain a directory `input` that contains the input image."""

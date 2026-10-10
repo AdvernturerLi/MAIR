@@ -40,6 +40,18 @@ DEGRADATION_STAGE: dict[Degradation, int] = {
 
 STAGE_NAMES: dict[int, str] = {1: "compression", 2: "imaging", 3: "scene"}
 
+# 退化 → 修复子任务（感知结果归类后映射到专家）
+DEGRADATION_TO_SUBTASK: dict[Degradation, Subtask] = {
+    "low resolution": "super-resolution",
+    "noise": "denoising",
+    "motion blur": "motion deblurring",
+    "defocus blur": "defocus deblurring",
+    "haze": "dehazing",
+    "rain": "deraining",
+    "dark": "brightening",
+    "jpeg compression artifact": "jpeg compression artifact removal",
+}
+
 
 def subtask_stage(subtask: Subtask) -> int:
     """子任务所属阶段，未知默认归为 imaging(2)。"""

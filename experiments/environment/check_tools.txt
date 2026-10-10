@@ -1,0 +1,61 @@
+====================================================================================
+MAIR 工具盘点（code / env / weights）
+====================================================================================
+
+[brightening] 注册表单 3 个，可用 3 个
+  可用候选: ['histogram_equalization', 'gamma_correction', 'constant_shift']
+  - histogram_equalization     code=True | env=True | weights=True          AVAILABLE
+  - gamma_correction           code=True | env=True | weights=True          AVAILABLE
+  - constant_shift             code=True | env=True | weights=True          AVAILABLE
+
+[defocus deblurring] 注册表单 3 个，可用 1 个
+  可用候选: ['restormer']
+  - drbnet                     code=True | env=False | weights=False        missing
+  - restormer                  code=True | env=True | weights=True          AVAILABLE
+  - ifan                       code=True | env=False | weights=False        missing
+
+[dehazing] 注册表单 4 个，可用 1 个
+  可用候选: ['xrestormer']
+  - xrestormer                 code=True | env=True | weights=True          AVAILABLE
+  - ridcp                      code=True | env=False | weights=False        missing
+  - dehazeformer               code=True | env=False | weights=False        missing
+  - maxim                      code=True | env=True | weights=False         missing
+
+[denoising] 注册表单 6 个，可用 5 个
+  可用候选: ['xrestormer', 'swinir_15', 'swinir_50', 'mprnet', 'restormer']
+  - xrestormer                 code=True | env=True | weights=True          AVAILABLE
+  - swinir_15                  code=True | env=True | weights=True          AVAILABLE
+  - swinir_50                  code=True | env=True | weights=True          AVAILABLE
+  - mprnet                     code=True | env=True | weights=True          AVAILABLE
+  - restormer                  code=True | env=True | weights=True          AVAILABLE
+
+[deraining] 注册表单 4 个，可用 3 个
+  可用候选: ['xrestormer', 'restormer', 'mprnet']
+  - xrestormer                 code=True | env=True | weights=True          AVAILABLE
+  - restormer                  code=True | env=True | weights=True          AVAILABLE
+  - mprnet                     code=True | env=True | weights=True          AVAILABLE
+
+[jpeg compression artifact removal] 注册表单 4 个，可用 4 个
+  可用候选: ['fbcnn_blind', 'fbcnn_5', 'fbcnn_90', 'swinir_40']
+  - fbcnn_blind                code=True | env=True | weights=True          AVAILABLE
+  - fbcnn_5                    code=True | env=True | weights=True          AVAILABLE
+  - fbcnn_90                   code=True | env=True | weights=True          AVAILABLE
+  - swinir_40                  code=True | env=True | weights=True          AVAILABLE
+
+[motion deblurring] 注册表单 4 个，可用 3 个
+  可用候选: ['restormer', 'mprnet', 'xrestormer']
+  - restormer                  code=True | env=True | weights=True          AVAILABLE
+  - mprnet                     code=True | env=True | weights=True          AVAILABLE
+  - xrestormer                 code=True | env=True | weights=True          AVAILABLE
+
+[super-resolution] 注册表单 5 个，可用 5 个
+  可用候选: ['diffbir', 'xrestormer', 'swinir_gan', 'swinir_psnr', 'hat']
+  - diffbir                    code=True | env=True | weights=True          AVAILABLE
+  - xrestormer                 code=True | env=True | weights=True          AVAILABLE
+  - swinir_gan                 code=True | env=True | weights=True          AVAILABLE
+  - swinir_psnr                code=True | env=True | weights=True          AVAILABLE
+  - hat                        code=True | env=True | weights=True          AVAILABLE
+
+====================================================================================
+可处理退化（≥1 可用工具）: ['low resolution', 'noise', 'motion blur', 'defocus blur', 'haze', 'rain', 'dark', 'jpeg compression artifact']
+====================================================================================

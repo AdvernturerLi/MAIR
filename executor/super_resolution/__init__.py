@@ -47,7 +47,8 @@ class DiffBIR(Tool):
             "--sr_scale", "4",
             "--color_fix_type", "wavelet",
             "--output", self.output_dir,
-            "--device", "cuda"
+            "--device", "cuda",
+            "--tiled"
         ]
     
 

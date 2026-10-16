@@ -23,3 +23,7 @@ Server launcher scripts preserve the deployed Linux paths and experiment identif
 Run workflow tests from this folder with `python -m pytest experience_learning/tests`. MAIR inference and runner tests remain in the repository's top-level `tests/` folder.
 
 AgenticIR patch base: `9640a291480dee3ba8f2974125d4ee9e3440f3d6`.
+
+## Interruption protection
+
+`export_completed_snapshot.py` exports committed successful nodes and exact validation inputs without credentials or model weights. `backup_exploration_local.py` downloads incremental archives, verifies archive/file SHA-256 and image readability, preserves history, and writes a verified local index only after the complete restorable snapshot passes. An uncompleted node and results newer than the last verified backup may need to be rerun. A replacement server still requires its tool environments and weights.

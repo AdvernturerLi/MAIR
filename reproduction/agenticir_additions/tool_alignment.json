@@ -1,0 +1,72 @@
+{
+  "reference_run": "/root/autodl-tmp/MAIR_ijcv2026_20261015/experiments/test160_noexp_20261015",
+  "tools": {
+    "super-resolution": [
+      "diffbir",
+      "xrestormer",
+      "swinir_gan",
+      "swinir_psnr",
+      "hat"
+    ],
+    "denoising": [
+      "xrestormer",
+      "swinir_15",
+      "swinir_50",
+      "mprnet",
+      "restormer"
+    ],
+    "motion deblurring": [
+      "restormer",
+      "mprnet",
+      "maxim",
+      "xrestormer"
+    ],
+    "defocus deblurring": [
+      "drbnet",
+      "restormer"
+    ],
+    "deraining": [
+      "maxim",
+      "xrestormer",
+      "restormer",
+      "mprnet"
+    ],
+    "dehazing": [
+      "xrestormer",
+      "ridcp",
+      "dehazeformer_outdoor_b",
+      "dehazeformer_indoor_b",
+      "dehazeformer_indoor_l"
+    ],
+    "brightening": [
+      "histogram_equalization",
+      "gamma_correction",
+      "constant_shift"
+    ],
+    "jpeg compression artifact removal": [
+      "fbcnn_blind",
+      "fbcnn_5",
+      "fbcnn_90",
+      "swinir_40"
+    ]
+  },
+  "wrapper_sha256": {
+    "executor/multitask_tools.py": "744c164e08b6eb0b82f7986412f07ad2267321803633419f945fd70799c80dff",
+    "executor/tool.py": "ef22f9eeeb858976feeb6952e4d331d1fdcd7e638fae39a0fc95a753c6ae0de5",
+    "executor/brightening/__init__.py": "1cdb16b77ebc8c430c4bf2dd0b424b49ba813b1b17884c16a47bf7a2190c6e44",
+    "executor/defocus_deblurring/__init__.py": "cc8cb7212afc2c4a91b19964b05f73b3709b18151c3928cb8468b11fc25fe616",
+    "executor/dehazing/__init__.py": "dd2515a99335da16d2f8e6a122ee7a1762259e4bb97daef656c9d4ce8866e3a5",
+    "executor/dehazing/configs/xrestormer.yml": "ca4a7213b4f07f059ebf2a319fda730ca9d58e6a16b3d76d35956efeebcf7c65",
+    "executor/denoising/__init__.py": "a002ff1c3bfecbe94ab87269ac3edf9b2f4cc8b3b9700d414a741b08cfe5b541",
+    "executor/denoising/configs/xrestormer.yml": "8eae51249922da90140324e27dc93c5187b5f37083c28ffd771b5ba8d872e0ed",
+    "executor/deraining/__init__.py": "d7904cd43a904bbf05f141bc9ee977e011ae2d7b9028ed6fe1804443d95f5826",
+    "executor/deraining/configs/xrestormer.yml": "1ab0dd5777ac9b7e1f90f1d85b15008a09306307a0039a343c5bf8ef55a8afbe",
+    "executor/jpeg_compression_artifact_removal/__init__.py": "3d406b94997f5d5234ff9b2f7fe8f16989b48d748df454a27613ac76017d680e",
+    "executor/motion_deblurring/__init__.py": "0a0d9e4b994d00a2809738872c90fb4c60ad5e4fa1a5e8dd7116a1681e458834",
+    "executor/motion_deblurring/configs/xrestormer.yml": "c7ae003e7310b7b74ccd646858f9bcd030a79ab92316b3f5d5d251f5573af88d",
+    "executor/super_resolution/__init__.py": "f87b6eaf0b8f2482f5255a5c3924d505aa96a8b298de033594b3836dc4f6027a",
+    "executor/super_resolution/configs/diffbir.yml": "997d63471240e35094a6c085e0e0a8bbcc45511351b4548f03f8b6efd09c038a",
+    "executor/super_resolution/configs/hat.yml": "c40f6867f5cf2a454c21320141db196f1c4b603ac388845c05351eb0adf85693",
+    "executor/super_resolution/configs/xrestormer.yml": "ff0eec327d7cda25bcd24cf57b9fb1413e70eaf9484c307ca96d767461295163"
+  }
+}

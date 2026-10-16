@@ -1,4 +1,4 @@
-"""MAIR 批跑：三阶段先验（--no-retrieval，阶段内纯 LLM）在 10 张图上评测 PSNR/SSIM。"""
+"""MAIR IJCV algorithm revision; published experience enabled by default."""
 import json
 import shutil
 from pathlib import Path
@@ -10,6 +10,7 @@ from skimage.metrics import structural_similarity as ssim_func
 from scheduler import Scheduler
 from expert import Expert
 from trajectory import Trajectory
+from paper_resources import ALGORITHM_VERSION, validate_paper_resources
 
 COMBOS = {
     "rain+haze": ["001", "002"],
@@ -21,8 +22,8 @@ COMBOS = {
 DATASET_ROOT = Path("/root/autodl-tmp/AgenticIR/dataset")
 HQ_DIR = DATASET_ROOT / "HQ"
 LQ_ROOT = DATASET_ROOT / "LQ/d2"
-OUT_ROOT = Path("output/mair_batch").resolve()
-RESULTS_PATH = Path("output/mair_batch_results.json")
+OUT_ROOT = Path("output/mair_ijcv2026_batch").resolve()
+RESULTS_PATH = Path("output/mair_ijcv2026_batch_results.json")
 
 
 def compute_psnr_ssim(img_path, ref_path):
@@ -40,13 +41,18 @@ def compute_psnr_ssim(img_path, ref_path):
 
 def run_mair(lq_path: Path, out_dir: Path):
     """跑 MAIR 三阶段先验，返回 (result_path, plan, evaluation)。"""
-    if out_dir.exists():
-        shutil.rmtree(out_dir)  # 清理上次残留，避免工具 precheck 报"输出目录非空"
+    if out_dir.exists() and any(out_dir.iterdir()):
+        raise FileExistsError(f"Use a fresh output directory: {out_dir}")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     trajectory = Trajectory(out_dir, input_path=lq_path)
-    scheduler = Scheduler(config_path=Path("config.yml"), with_retrieval=False,
+    scheduler = Scheduler(config_path=Path("config.yml"), with_retrieval=True,
                           trajectory=trajectory)
+    if scheduler._cfg.get("REQUIRE_PAPER_RESOURCES", False):
+        validate_paper_resources(scheduler)
+    trajectory.record("config", algorithm_version=ALGORITHM_VERSION,
+                      experience_sha256=scheduler.experience_hash,
+                      model=getattr(scheduler.gpt4, "model", None))
     evaluation = scheduler.perceive(lq_path)
     plan = scheduler.plan(lq_path, evaluation)
 
@@ -55,11 +61,12 @@ def run_mair(lq_path: Path, out_dir: Path):
     cur_img = clean_input_dir / "input.png"
     shutil.copy(lq_path, cur_img)
 
-    for subtask in plan:
+    for index, subtask in enumerate(plan):
         degradation = scheduler.subtask_degra_dict[subtask]
         expert = Expert(subtask, degradation, config_path=Path("config.yml"),
                         trajectory=trajectory)
-        out = expert.restore(cur_img, out_dir)
+        out = expert.restore(cur_img, out_dir, remaining_degradations=[
+            scheduler.subtask_degra_dict[s] for s in plan[index:]])
         if out is None:
             trajectory.record("abort", subtask=subtask, reason="expert returned None")
             trajectory.save()

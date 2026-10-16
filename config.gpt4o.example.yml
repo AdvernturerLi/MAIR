@@ -11,3 +11,10 @@ STOP_THRESHOLD: "low"
 USE_SIZE_HEURISTIC_FOR_SR: true
 LOW_RES_MAX_SIDE: 300
 LOW_RES_AS_BLUR: true
+
+# Refuse replacement models, disabled experience, or incomplete Table 15 tools.
+REQUIRE_PAPER_RESOURCES: true
+# Paper does not publish an exact coarse inclusion rule or LR detector.
+# These retained AgenticIR assumptions must be reported in every run.
+PERCEPTION_THRESHOLD: "medium"
+ENABLE_MAXIM: false  # Verify its dedicated JAX/Flax runtime before enabling.

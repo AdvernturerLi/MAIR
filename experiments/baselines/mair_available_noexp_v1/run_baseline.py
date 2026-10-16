@@ -298,6 +298,18 @@ def main():
     ap.add_argument("--config", type=Path, default=Path("config.yml"))
     args = ap.parse_args()
 
+    if not args.metrics_only:
+        try:
+            from paper_resources import ALGORITHM_VERSION
+        except ImportError:
+            pass  # Historical checkout predates the IJCV algorithm revision.
+        else:
+            raise SystemExit(
+                f"This v1 runner cannot write {ALGORITHM_VERSION} results into the old baseline. "
+                "Use a new experiment directory and the revised entry point. "
+                "--metrics-only remains available for existing images."
+            )
+
     rows = list(csv.DictReader(open(MANIFEST, newline="")))
     if args.limit:
         rows = rows[:args.limit]

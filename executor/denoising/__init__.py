@@ -14,6 +14,6 @@ denoising_toolbox = [
     SwinIR(subtask=subtask, pretrained_on='15'),
     SwinIR(subtask=subtask, pretrained_on='50'),
     MPRNet(subtask=subtask),
-    # MAXIM(subtask=subtask),  # CPU慢，暂时排除
+    MAXIM(subtask=subtask),
     Restormer(subtask=subtask),
 ]

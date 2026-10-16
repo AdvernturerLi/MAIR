@@ -6,6 +6,7 @@
           阶段内由 GPT-4o(+经验) 排序（多模态：原图+粗感知+指令）→ 拼接。
 """
 import json
+import hashlib
 from pathlib import Path
 from typing import Optional
 
@@ -14,7 +15,7 @@ import yaml
 
 from llm import DepictQA, GPT4
 from registry import available_tools
-from stage_prior import DEGRADATION_TO_SUBTASK, subtask_stage
+from stage_prior import DEGRADATION_TO_SUBTASK, subtask_stage, STAGE_NAMES
 from utils.custom_types import Degradation, Level, Subtask
 from instruction import InstructionSpec
 from trajectory import Trajectory
@@ -46,39 +47,42 @@ class Scheduler:
         # 配置：低分辨率尺寸启发式（来源 AgenticIR，非论文正文，见 M09）
         self._cfg: dict = {}
         if Path(config_path).exists():
-            self._cfg = yaml.safe_load(Path(config_path).read_text()) or {}
+            self._cfg = yaml.safe_load(Path(config_path).read_text(encoding="utf-8")) or {}
         self.low_res_max_side = int(self._cfg.get("LOW_RES_MAX_SIDE", 300))
         self.use_size_heuristic_sr = bool(self._cfg.get("USE_SIZE_HEURISTIC_FOR_SR", True))
 
-        # 经验：要求真实、非空、有来源；否则显式切 no-experience 档位（M04）
+        # Default to the published Sec.8 experience; invalid explicit files fail.
         self.with_retrieval, self.schedule_experience, self.experience_source = (
             self._load_experience(experience_path, with_retrieval)
         )
 
     # —— 经验加载与校验 ——
     def _load_experience(self, experience_path, with_retrieval):
+        self.experience_hash = None
+        self.experience_path = None
         if not with_retrieval:
             return False, "", None
         if experience_path is None:
-            self._log("经验模式：未提供经验文件，显式切到 no-experience 档位。")
-            return False, "", None
+            experience_path = Path(__file__).parent / "experience" / "paper_ijcv2026.json"
         p = Path(experience_path)
         if not p.exists():
-            self._log(f"经验模式：文件不存在 {p}，显式切到 no-experience 档位。")
-            return False, "", None
+            raise ValueError(f"Experience file does not exist: {p}")
         try:
-            data = json.loads(p.read_text())
+            data = json.loads(p.read_text(encoding="utf-8"))
         except Exception as e:
-            self._log(f"经验文件无法解析 {p}: {e}，显式切到 no-experience 档位。")
-            return False, "", None
-        distilled = (data.get("distilled") or "").strip()
-        if not distilled:
-            self._log(f"经验文件 {p} 的 distilled 字段为空，显式切到 no-experience 档位。")
-            return False, "", None
-        source = data.get("source") or (data.get("_meta") or {}).get("source")
-        if not source:
-            self._log(f"经验文件 {p} 缺少来源记录，标记来源未知。")
-            source = "unknown"
+            raise ValueError(f"Invalid experience file: {p}") from e
+        if not isinstance(data, dict):
+            raise ValueError("Experience must be a JSON object")
+        distilled, source = data.get("distilled"), data.get("source")
+        if not isinstance(distilled, str) or not distilled.strip():
+            raise ValueError("Experience requires a nonempty distilled string")
+        if not isinstance(source, str) or not source.strip():
+            raise ValueError("Experience requires a nonempty source string")
+        self.experience_path = p.resolve()
+        self.experience_hash = hashlib.sha256(p.read_bytes()).hexdigest()
+        if self.trajectory is not None:
+            self.trajectory.record("experience_loaded", path=self.experience_path,
+                                   sha256=self.experience_hash, source=source)
         return True, distilled, source
 
     def _log(self, msg):
@@ -98,28 +102,34 @@ class Scheduler:
     # —— 三阶段约束规划 ——
     def plan(self, lq_path: Path, evaluation: list[tuple[Degradation, Level]],
              instruction: str = "") -> list[Subtask]:
-        """按指令过滤 medium+ → 按三阶段分组 → 阶段内多模态排序 → 拼接。"""
+        """粗感知清单 → 指令语义更新 → 三阶段内规划；模型失败直接报告。"""
         inst = InstructionSpec.parse(instruction)
         agenda: list[Subtask] = []
 
         # low resolution 由尺寸启发式判断（可配置，见 M09）；同样受可用工具检查约束
         if self.use_size_heuristic_sr:
-            img_shape = cv2.imread(str(lq_path)).shape[:2]
+            image = cv2.imread(str(lq_path))
+            if image is None:
+                raise ValueError(f"Cannot read image: {lq_path}")
+            img_shape = image.shape[:2]
             if max(img_shape) < self.low_res_max_side:
                 if not inst.should_process("low resolution"):
                     self._record_skip("low resolution", "instruction")
-                elif not available_tools("super-resolution"):
+                elif not self._available_tools("super-resolution"):
                     self._record_skip("low resolution", "no_available_tools")
                 else:
                     agenda.append("super-resolution")
 
+        perception_threshold = self._cfg.get("PERCEPTION_THRESHOLD", "medium")
+        if perception_threshold not in self.levels:
+            raise ValueError("Invalid PERCEPTION_THRESHOLD")
         for degradation, severity in evaluation:
             subtask = self.degra_subtask_dict.get(degradation)
             if subtask is None:
                 continue
-            if self.levels.index(severity) < 2:  # 低于 medium，不处理
+            if self.levels.index(severity) < self.levels.index(perception_threshold):
                 continue
-            if not available_tools(subtask):  # 无可用工具，跳过（M07）
+            if not self._available_tools(subtask):
                 self._record_skip(degradation, "no_available_tools")
                 continue
             if not inst.should_process(degradation):
@@ -129,6 +139,11 @@ class Scheduler:
 
         agenda = list(dict.fromkeys(agenda))  # 去重（P2）
 
+        # Sec.8 tschedule: instructions may update (not merely reorder) the agenda.
+        # With no instruction, the update is an identity operation.
+        if instruction.strip():
+            agenda = self._update_degradations(lq_path, evaluation, agenda, instruction)
+
         grouped: dict[int, list[Subtask]] = {1: [], 2: [], 3: []}
         for subtask in agenda:
             grouped[subtask_stage(subtask)].append(subtask)
@@ -136,82 +151,77 @@ class Scheduler:
         plan: list[Subtask] = []
         for stage in (1, 2, 3):
             stage_agenda = grouped[stage]
-            if len(stage_agenda) <= 1:
-                plan.extend(stage_agenda)
-            else:
-                plan.extend(self._order_within_stage(lq_path, evaluation, inst, stage_agenda))
+            if not stage_agenda:
+                continue
+            plan.extend(self._paper_order(lq_path, evaluation, inst, stage_agenda, stage, plan))
 
         if self.trajectory is not None:
             self.trajectory.record("plan", plan=plan, instruction=instruction,
                                    experience_source=self.experience_source,
+                                   experience_sha256=getattr(self, "experience_hash", None),
                                    with_retrieval=self.with_retrieval)
         return plan
+
+    def _update_degradations(self, image, evaluation, agenda, instruction):
+        allowed = list(self.degra_subtask_dict)
+
+        def check(obj):
+            assert isinstance(obj, dict) and set(obj) == {"thought", "updated degradations"}
+            assert isinstance(obj["thought"], str)
+            values = obj["updated degradations"]
+            assert isinstance(values, list) and all(isinstance(v, str) for v in values)
+            assert len(values) == len(set(values))
+            assert all(v in allowed for v in values)
+
+        result = json.loads(self.gpt4(img_path=image,
+            prompt=prompts.update_degradations_prompt.format(
+                instruction=instruction, degradations=[self.subtask_degra_dict[s] for s in agenda],
+                perception=evaluation, allowed=allowed), format_check=check))
+        check(result)
+        updated = []
+        for degradation in result["updated degradations"]:
+            subtask = self.degra_subtask_dict[degradation]
+            if not self._available_tools(subtask):
+                self._record_skip(degradation, "no_available_tools")
+                if self._cfg.get("REQUIRE_PAPER_RESOURCES", False):
+                    raise RuntimeError(f"Requested degradation has no available tools: {degradation}")
+                continue
+            updated.append(subtask)
+        if self.trajectory is not None:
+            self.trajectory.record("instruction_update", before=agenda, after=updated,
+                                   instruction=instruction, thought=result["thought"])
+        return updated
+
+    def _paper_order(self, image, evaluation, inst, agenda, stage, previous_plan):
+        def check(obj):
+            assert isinstance(obj, dict) and set(obj) == {"thought", "order"}
+            assert isinstance(obj["thought"], str)
+            order = obj["order"]
+            assert isinstance(order, list) and all(isinstance(s, str) for s in order)
+            assert len(order) == len(agenda) and set(order) == set(agenda)
+
+        result = json.loads(self.gpt4(img_path=image,
+            prompt=prompts.paper_schedule_prompt.format(
+                degradations=[self.subtask_degra_dict[s] for s in agenda], agenda=agenda,
+                stage=STAGE_NAMES[stage], previous_plan=previous_plan, perception=evaluation,
+                instruction=inst.text,
+                experience=self.schedule_experience if self.with_retrieval else "No experience (ablation)."),
+            format_check=check))
+        check(result)
+        if self.trajectory is not None:
+            self.trajectory.record("stage_plan", stage=stage, order=result["order"],
+                                   thought=result["thought"])
+        return result["order"]
 
     def _record_skip(self, degradation, reason):
         if self.trajectory is not None:
             self.trajectory.record("skip_degradation", degradation=degradation, reason=reason)
 
-    # —— 阶段内排序 ——
-    def _order_within_stage(self, lq_path, evaluation, inst, agenda):
-        degradations = [self.subtask_degra_dict[s] for s in agenda]
-        perception = ", ".join(
-            f"{d}: {lvl}" for d, lvl in evaluation if d in degradations
-        )
-        try:
-            if self.with_retrieval:
-                return self._schedule_w_retrieval(lq_path, degradations, agenda, perception, inst)
-            return self._schedule_wo_retrieval(lq_path, degradations, agenda, perception, inst)
-        except Exception as e:
-            # LLM 排序/格式解析失败：回退到确定性顺序（严重度降序），不中断整条流程
-            self._log(f"阶段内排序失败，回退到严重度降序: {type(e).__name__}: {e}")
-            sev = dict(evaluation)
-            return sorted(
-                agenda,
-                key=lambda s: self.levels.index(
-                    sev.get(self.subtask_degra_dict[s], "very low")
-                ),
-                reverse=True,
-            )
-
-    def _schedule_w_retrieval(self, lq_path, degradations, agenda, perception, inst):
-        def check_order(schedule):
-            assert isinstance(schedule, dict) and set(schedule.keys()) == {"thought", "order"}
-            order = schedule["order"]
-            assert isinstance(order, list)
-            assert len(order) == len(agenda) and len(set(order)) == len(agenda)
-            assert set(order) == set(agenda)
-
-        schedule = self.gpt4(
-            img_path=lq_path,
-            prompt=prompts.schedule_w_retrieval_prompt.format(
-                degradations=degradations, agenda=agenda,
-                perception=perception, instruction=inst.text,
-                experience=self.schedule_experience,
-            ),
-            format_check=check_order,
-        )
-        return json.loads(schedule)["order"]
-
-    def _schedule_wo_retrieval(self, lq_path, degradations, agenda, perception, inst):
-        insights = self.gpt4(
-            img_path=lq_path,
-            prompt=prompts.reason_to_schedule_prompt.format(
-                degradations=degradations, agenda=agenda,
-                perception=perception, instruction=inst.text,
-            )
-        )
-
-        def check_order(order):
-            assert isinstance(order, list)
-            assert len(order) == len(agenda) and len(set(order)) == len(agenda)
-            assert set(order) == set(agenda)
-
-        order = self.gpt4(
-            img_path=lq_path,
-            prompt=prompts.schedule_wo_retrieval_prompt.format(
-                degradations=degradations, agenda=agenda,
-                perception=perception, instruction=inst.text, insights=insights
-            ),
-            format_check=check_order,
-        )
-        return json.loads(order)
+    def _available_tools(self, subtask):
+        names = available_tools(subtask)
+        if not self._cfg.get("ENABLE_MAXIM", False):
+            names = [n for n in names if n != "maxim"]
+        if self._cfg.get("REQUIRE_PAPER_RESOURCES", False) or self._cfg.get("USE_PAPER_TOOLSET", False):
+            from paper_resources import PAPER_TOOLS
+            names = [n for n in names if n in PAPER_TOOLS[subtask]]
+        return names

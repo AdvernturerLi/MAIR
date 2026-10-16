@@ -1,4 +1,7 @@
 import json
+import ast
+import re
+import pytest
 
 import numpy as np
 import cv2
@@ -23,7 +26,19 @@ class FakeGPT4:
 
     def __call__(self, img_path=None, prompt="", format_check=None):
         self.calls.append({"img_path": img_path, "prompt": prompt})
-        return self.responses.pop(0)
+        if '"updated degradations"' in prompt:
+            from instruction import InstructionSpec
+            values = ast.literal_eval(re.search(r"removed are (\[.*?\])", prompt).group(1))
+            inst = InstructionSpec.parse(prompt.split('The user instruction: ', 1)[1].split('.\n', 1)[0])
+            result = {"thought": "test instruction update", "updated degradations": [d for d in values if inst.should_process(d)]}
+        elif self.responses:
+            result = json.loads(self.responses.pop(0))
+        else:
+            agenda = ast.literal_eval(re.search(r"these tasks: (\[.*?\])", prompt).group(1))
+            result = {"thought": "test stage plan", "order": agenda}
+        if format_check:
+            format_check(result)
+        return json.dumps(result)
 
 
 def _make_img(tmp_path, h=400, w=400):
@@ -103,7 +118,7 @@ def test_plan_wo_retrieval_multimodal(monkeypatch, tmp_path):
     monkeypatch.setattr("scheduler.available_tools", lambda s: ["t1", "t2"])
     img = _make_img(tmp_path)
     evaluation = [("noise", "medium"), ("motion blur", "medium")]
-    fake_gpt4 = FakeGPT4(["deblur before denoise", json.dumps(["motion deblurring", "denoising"])])
+    fake_gpt4 = FakeGPT4([json.dumps({"thought": "deblur first", "order": ["motion deblurring", "denoising"]})])
     s = _scheduler(tmp_path, evaluation, fake_gpt4=fake_gpt4, with_retrieval=False)
     plan = s.plan(img, evaluation, instruction="尽量快更清晰")
     assert plan == ["motion deblurring", "denoising"]
@@ -111,7 +126,7 @@ def test_plan_wo_retrieval_multimodal(monkeypatch, tmp_path):
     for call in fake_gpt4.calls:
         assert call["img_path"] == img
         assert "尽量快更清晰" in call["prompt"]
-        assert "noise: medium" in call["prompt"]
+        assert "noise" in call["prompt"] and "medium" in call["prompt"]
 
 
 def test_plan_w_retrieval_multimodal_with_experience(monkeypatch, tmp_path):
@@ -126,11 +141,11 @@ def test_plan_w_retrieval_multimodal_with_experience(monkeypatch, tmp_path):
                    experience_path=exp, with_retrieval=True)
     plan = s.plan(img, evaluation, instruction="尽量快")
     assert plan == ["motion deblurring", "denoising"]
-    call = fake_gpt4.calls[0]
+    call = fake_gpt4.calls[-1]
     assert call["img_path"] == img
     assert "尽量快" in call["prompt"]
     assert "deblur first" in call["prompt"]
-    assert "noise: medium" in call["prompt"]
+    assert "noise" in call["prompt"] and "medium" in call["prompt"]
 
 
 def test_plan_skips_sr_without_tools(monkeypatch, tmp_path):
@@ -145,8 +160,7 @@ def test_plan_skips_sr_without_tools(monkeypatch, tmp_path):
     assert plan == []
 
 
-def test_order_within_stage_falls_back_on_llm_failure(monkeypatch, tmp_path):
-    # P2：LLM 阶段内排序失败时回退到严重度降序，不中断整条流程
+def test_order_failure_is_not_silently_replaced(monkeypatch, tmp_path):
     monkeypatch.setattr("scheduler.available_tools", lambda s: ["t"])
 
     class BoomGPT4:
@@ -156,8 +170,8 @@ def test_order_within_stage_falls_back_on_llm_failure(monkeypatch, tmp_path):
     img = _make_img(tmp_path)
     evaluation = [("noise", "medium"), ("motion blur", "high")]
     s = _scheduler(tmp_path, evaluation, fake_gpt4=BoomGPT4(), with_retrieval=False)
-    plan = s.plan(img, evaluation)
-    assert plan == ["motion deblurring", "denoising"]  # high 先于 medium
+    with pytest.raises(RuntimeError):
+        s.plan(img, evaluation)
 
 
 def test_plan_dedups_duplicate_tasks(monkeypatch, tmp_path):

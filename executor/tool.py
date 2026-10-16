@@ -2,6 +2,7 @@ import os
 from pathlib import *
 import subprocess
 import time
+import shlex
 from typing import Optional
 
 
@@ -34,6 +35,7 @@ class Tool:
         self.script_path: Optional[Path] = None
         # 具体权重文件（相对 work_dir），用于 M07 可用性检查；为空则退回"任意权重"检查
         self.required_weight_files: list[Path] = []
+        self.python_executable: Optional[Path] = None
         if work_dir is not None:
             assert script_rel_path is not None, "If `work_dir` is provided, `script_rel_path` should also be provided."
             self.work_dir: Path = Path().resolve() / 'executor' / subtask / 'tools' / work_dir
@@ -84,13 +86,13 @@ class Tool:
 
     def _get_cmd(self) -> str:
         opts = self._get_cmd_opts()
+        return shlex.join([str(self._python_path()), str(self.script_path), *map(str, opts)])
+
+    def _python_path(self) -> Path:
+        if self.python_executable is not None:
+            return Path(self.python_executable)
         env_name = self.tool_name.split('_')[0]
-        # 直接用 env 的 python，避免 conda run 的 exit-code/缓冲问题与 PATH 依赖
-        python = f"/root/miniconda3/envs/{env_name}/bin/python"
-        cmd = f"'{python}' '{self.script_path}'"
-        for opt in opts:
-            cmd += f" '{opt}'"
-        return cmd
+        return Path(f"/root/miniconda3/envs/{env_name}/bin/python")
 
     def _get_cmd_opts(self, *args) -> list[str]:
         raise NotImplementedError
@@ -109,15 +111,14 @@ class Tool:
 
         纯 Python 工具（如 brightening）在主进程内运行，无外部脚本/环境/权重依赖。
         """
-        key = id(self)
+        key = (id(self), str(self._python_path()))
         if key in _availability_cache:
             return _availability_cache[key]
         if self.script_path is None:
             info = {"code": True, "env": True, "weights": True, "available": True}
         else:
             code = self._exists(self.script_path)
-            env_name = self.tool_name.split("_")[0]
-            env = self._exists(Path(f"/root/miniconda3/envs/{env_name}/bin/python"))
+            env = self._exists(self._python_path())
             weights = self._weights_present()
             info = {"code": code, "env": env, "weights": weights,
                     "available": code and env and weights}

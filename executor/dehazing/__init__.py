@@ -11,19 +11,31 @@ __all__ = ['dehazing_toolbox']
 class DehazeFormer(Tool):
     """[Vision Transformers for Single Image Dehazing (TIP 2023)](https://doi.org/10.1109/TIP.2023.3256763)"""    
 
-    def __init__(self):
+    def __init__(self, variant=None):
+        variants = {
+            None: ("dehazeformer-b", "saved_models"),
+            "outdoor_b": ("dehazeformer-b", "saved_models/outdoor"),
+            "indoor_b": ("dehazeformer-b", "saved_models/indoor"),
+            "indoor_l": ("dehazeformer-l", "saved_models/indoor"),
+        }
+        if variant not in variants:
+            raise ValueError(f"Unknown DehazeFormer variant: {variant}")
+        self.model_name, self.checkpoint_dir = variants[variant]
         super().__init__(
-            tool_name="dehazeformer",
+            tool_name="dehazeformer" if variant is None else f"dehazeformer_{variant}",
             subtask="dehazing",
             work_dir="DehazeFormer",
             script_rel_path="inference.py"
         )
+        self.required_weight_files = [Path(self.checkpoint_dir) / f"{self.model_name}.pth"]
 
     def _get_cmd_opts(self) -> list[str]:
         return [
             "--data_dir", self.input_dir,
             "--result_dir", self.output_dir,
-            "--save_dir", 'saved_models'
+            "--save_dir", self.checkpoint_dir,
+            "--model", self.model_name,
+            "--num_workers", "0",
         ]
     
 
@@ -55,5 +67,8 @@ dehazing_toolbox = [
     XRestormer(subtask=subtask),
     RIDCP(),
     DehazeFormer(),
+    DehazeFormer("outdoor_b"),
+    DehazeFormer("indoor_b"),
+    DehazeFormer("indoor_l"),
     MAXIM(subtask=subtask),
 ]

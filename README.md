@@ -1,5 +1,11 @@
 # MAIR 复现
 
+> **2026-10-15 更新**：当前实现已切换到新版 IJCV Algorithm 3，默认使用作者公开经验、GPT 质量比较并允许保留输入，支持指令更新退化与剩余退化上下文。
+> 最新使用方法、测试及未完成条件见 [IJCV2026_REPRODUCTION.md](IJCV2026_REPRODUCTION.md)。当前仍有工具适配/权重与服务器验证缺口，不能声明“完整复现”。
+> 已在学校 A100 服务器跑通 DeepSeek 替代模型的真实单图流程；MAXIM 去雨、去模糊已在独立 JAX 环境验证，76 项离线测试通过。其他工具/权重缺口见最新说明。
+>
+> 下文保留的是 **2026-10-10 旧版说明**；其中默认 no-experience、最多三个候选、经验未公开等描述不适用于当前算法版本。不要用旧 v1 基线运行器运行新算法。
+
 复现 [MAIR](https://arxiv.org/abs/2503.09403)（Multi-Agent Image Restoration, IJCV），
 基于 AgenticIR 的工具与 LLM 基础设施。本仓库忠实实现论文第 3 节的
 **三阶段退化先验 + 两级多智能体（Scheduler / Expert）+ 工具注册表**。

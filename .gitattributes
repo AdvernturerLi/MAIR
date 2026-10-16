@@ -1,0 +1,3 @@
+
+# Preserve upstream context whitespace in the archived git-format patch.
+reproduction/agenticir_changes.patch -whitespace

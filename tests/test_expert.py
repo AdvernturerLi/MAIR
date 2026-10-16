@@ -1,4 +1,6 @@
 import json
+import pytest
+import registry
 
 from expert import Expert
 
@@ -24,7 +26,10 @@ class FakeGPT4:
 
     def __call__(self, img_path=None, prompt="", format_check=None):
         self.calls.append({"img_path": img_path, "prompt": prompt})
-        return self.responses.pop(0)
+        result = self.responses.pop(0)
+        if format_check:
+            format_check(json.loads(result))
+        return result
 
 
 class FakeTool:
@@ -40,7 +45,15 @@ class FakeTool:
 
 def _expert(tmp_path, toolbox, levels, compare="former", gpt4_responses=None,
             stop_threshold="low", subtask="deraining", degradation="rain"):
-    gpt4 = FakeGPT4(gpt4_responses or [])
+    responses = list(gpt4_responses or [])
+    if not responses and len(toolbox) == 1:
+        responses.append(json.dumps({"thought": "single tool", "candidates": [toolbox[0].tool_name]}))
+    responses += [json.dumps({"thought": "compare", "choice": compare})] * len(toolbox)
+    gpt4 = FakeGPT4(responses)
+    # Fake tools still require registry forms, as real tools do.
+    for t in toolbox:
+        if t.tool_name not in registry.tool_names(subtask):
+            registry.REGISTRY[subtask].append(dict(name=t.tool_name, desc="test tool", suitable="test", speed="test", note=""))
     return Expert(
         subtask=subtask,
         degradation=degradation,
@@ -80,8 +93,10 @@ def test_compare_all_failed_candidates(tmp_path):
     img = _img(tmp_path)
     out = expert.restore(img, tmp_path / "work")
     assert "tool-tool2" in str(out)
-    comp_calls = [c for c in expert.depictqa.calls if c["task"] == "comp_quality"]
-    assert len(comp_calls) == 1          # 两两比较全部失败候选（1 次）
+    comp_calls = [c for c in expert.gpt4.calls if isinstance(c["img_path"], list)]
+    assert len(comp_calls) == 2
+    assert comp_calls[0]["img_path"][0] == img.resolve()
+    assert not any(c["task"] == "comp_quality" for c in expert.depictqa.calls)
 
 
 def test_error_recovery_continues(tmp_path):
@@ -98,7 +113,7 @@ def test_error_recovery_continues(tmp_path):
     assert "tool-tool2" in str(out)
 
 
-def test_all_tools_failed_returns_none(tmp_path):
+def test_all_tools_failed_raises(tmp_path):
     t1 = FakeTool("tool1", fail=True)
     t2 = FakeTool("tool2", fail=True)
     expert = _expert(
@@ -107,11 +122,11 @@ def test_all_tools_failed_returns_none(tmp_path):
         gpt4_responses=[json.dumps({"thought": "t", "candidates": ["tool1", "tool2"]})],
     )
     img = _img(tmp_path)
-    out = expert.restore(img, tmp_path / "work")
-    assert out is None                    # 全部失败，明确返回 None
+    with pytest.raises(RuntimeError, match="All candidate tools failed"):
+        expert.restore(img, tmp_path / "work")
 
 
-def test_select_tools_dedups_candidates(tmp_path):
+def test_select_tools_rejects_duplicate_candidates(tmp_path):
     # P2：候选列表去重
     t1 = FakeTool("tool1")
     t2 = FakeTool("tool2")
@@ -120,8 +135,8 @@ def test_select_tools_dedups_candidates(tmp_path):
         tmp_path, [t1, t2, t3], levels=[],
         gpt4_responses=[json.dumps({"thought": "t", "candidates": ["tool1", "tool1", "tool2"]})],
     )
-    cands = expert._select_tools(_img(tmp_path), "medium", instruction="")
-    assert cands == ["tool1", "tool2"]
+    with pytest.raises(AssertionError):
+        expert._select_tools(_img(tmp_path), "medium", instruction="")
 
 
 def test_select_tools_passes_instruction_to_prompt(tmp_path):
@@ -140,7 +155,7 @@ def test_select_tools_passes_instruction_to_prompt(tmp_path):
     assert "medium" in call["prompt"]
 
 
-def test_lowres_expert_does_not_skip_on_low_blur_proxy(tmp_path):
+def test_lowres_expert_obeys_algorithm3_input_threshold(tmp_path):
     # M09：低分辨率用 blur 代理，severity=very low 也不应跳过（尺寸已确认需超分）
     t1 = FakeTool("xrestormer")
     t2 = FakeTool("hat")
@@ -151,14 +166,14 @@ def test_lowres_expert_does_not_skip_on_low_blur_proxy(tmp_path):
     )
     img = _img(tmp_path)
     out = expert.restore(img, tmp_path / "work")
-    assert len(expert.gpt4.calls) == 1          # 进入选工具阶段，未跳过
-    assert "tool-xrestormer" in str(out)
+    assert len(expert.gpt4.calls) == 0
+    assert out == img.resolve()
 
 
-def test_single_tool_skips_smart_selection(tmp_path):
+def test_single_tool_uses_paper_selection_prompt(tmp_path):
     # M07：单工具任务直接返回该工具，不假装智能候选选择
     t1 = FakeTool("xrestormer")
     expert = _expert(tmp_path, [t1], levels=[])
     cands = expert._select_tools(_img(tmp_path), "medium", instruction="")
     assert cands == ["xrestormer"]
-    assert expert.gpt4.calls == []
+    assert len(expert.gpt4.calls) == 1

@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import yaml
 import shutil
+import zipfile
 
 from .tool import Tool
 
@@ -241,6 +242,38 @@ class MAXIM(Tool):
         self.opt_task, self.opt_ckpt_name = opt_dict[subtask]
         # 权重文件（相对 work_dir），MAXIM 各任务 ckpt 不同（M07）
         self.required_weight_files = [Path(f"maxim/pretrained_models/{self.opt_ckpt_name}")]
+        dedicated_python = Path(__file__).resolve().parents[1] / ".venvs/maxim-jax/bin/python"
+        override = os.environ.get("MAIR_MAXIM_PYTHON")
+        if override:
+            self.python_executable = Path(override)
+        elif dedicated_python.exists():
+            self.python_executable = dedicated_python
+
+    def _get_cmd(self):
+        # Do not let JAX reserve most of the GPU alongside the DepictQA service,
+        # and do not silently run a purported GPU experiment on CPU.
+        return ("XLA_PYTHON_CLIENT_PREALLOCATE=false JAX_PLATFORMS=cuda "
+                "XLA_FLAGS=--xla_gpu_autotune_level=0 " + super()._get_cmd())
+
+    def _weights_present(self):
+        # A truncated NPZ can exist on disk but is not a usable checkpoint.
+        if not super()._weights_present():
+            return False
+        return all(zipfile.is_zipfile(self.work_dir / path)
+                   for path in self.required_weight_files)
+
+    def _invoke(self):
+        try:
+            super()._invoke()
+        finally:
+            # MAXIM creates an input/input directory. On a subprocess error this
+            # must also be removed, otherwise every subsequent candidate fails
+            # the single-input precheck.
+            temporary = getattr(self, "rqd_input_dir", None)
+            if temporary is not None and temporary.exists():
+                if temporary.resolve().parent != self.input_dir.resolve():
+                    raise RuntimeError("Unexpected MAXIM temporary input path")
+                shutil.rmtree(temporary)
 
     def _preprocess(self):
         """Requires parameter `input_dir: Path`. MAXIM requires that the option `input_dir` should contain a directory `input` that contains the input image."""

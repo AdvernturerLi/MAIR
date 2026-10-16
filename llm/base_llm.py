@@ -15,7 +15,7 @@ class BaseLLM:
                  silent: bool = False
                  ):
         if config_path is not None:
-            with open(config_path, "r") as f:
+            with open(config_path, "r", encoding="utf-8") as f:
                 self.cfg: dict = yaml.safe_load(f)
         else:
             self.cfg = None

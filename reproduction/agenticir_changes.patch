@@ -1,0 +1,846 @@
+diff --git a/executor/__init__.py b/executor/__init__.py
+index d5e2aa5..17aac12 100644
+--- a/executor/__init__.py
++++ b/executor/__init__.py
+@@ -167,3 +167,12 @@ executor.register_subtask('deraining', deraining_toolbox)
+ executor.register_subtask('dehazing', dehazing_toolbox)
+ executor.register_subtask('brightening', brightening_toolbox)
+ executor.register_subtask('jpeg compression artifact removal', jpeg_compression_artifact_removal_toolbox)
++
++# Fixed tool universe shared with MAIR test160
++import json as _json
++_profile = _json.loads((Path(__file__).resolve().parents[1] / 'tool_alignment.json').read_text())
++for _subtask, _names in _profile['tools'].items():
++    _by_name = {t.tool_name: t for t in executor.toolbox_router[_subtask]}
++    if set(_names) - set(_by_name):
++        raise RuntimeError(f'Missing aligned adapters: {_subtask}')
++    executor.toolbox_router[_subtask] = [_by_name[n] for n in _names]
+diff --git a/executor/defocus_deblurring/__init__.py b/executor/defocus_deblurring/__init__.py
+index a7dc9c7..7bba1b9 100644
+--- a/executor/defocus_deblurring/__init__.py
++++ b/executor/defocus_deblurring/__init__.py
+@@ -1,5 +1,6 @@
+ import os
+ import shutil
++from pathlib import Path
+ 
+ from ..tool import Tool
+ from ..multitask_tools import *
+@@ -18,6 +19,8 @@ class IFAN(Tool):
+             work_dir="IFAN",
+             script_rel_path='run.py'
+         )
++        # 权重文件（相对 work_dir），用于 M07 可用性检查
++        self.required_weight_files = [Path("ckpt/IFAN_44.pytorch")]
+ 
+     def _preprocess(self):
+         """Requires parameter `input_dir: Path`. IFAN requires that the option `input_dir` should contain a directory {data} (i.e., 'random' here) that contains the input image."""
+@@ -36,7 +39,7 @@ class IFAN(Tool):
+             "--network", "IFAN",
+             "--config", "config_IFAN_44",
+             "--data", "random",
+-            "--ckpt_abs_name", 'IFAN/ckpt/IFAN_44.pytorch',
++            "--ckpt_abs_name", 'ckpt/IFAN_44.pytorch',
+             "--data_offset", self.input_dir,
+             "--output_offset", self.output_dir,
+         ]
+@@ -85,14 +88,16 @@ class DRBNet(Tool):
+             work_dir="DRBNet",
+             script_rel_path='run.py'
+         )
++        # 权重文件（相对 work_dir），用于 M07 可用性检查
++        self.required_weight_files = [Path("ckpts/single/single_image_defocus_deblurring.pth")]
+ 
+     def _get_cmd_opts(self) -> list[str]:
+-        """Requires parameter `input_dir: Path` and `output_dir: Path`"""        
++        """Requires parameter `input_dir: Path` and `output_dir: Path`"""
+         return [
+             "--eval_data", "CUHK",
+             "--dataroot_cuhk", self.input_dir,
+             "--results_dir", self.output_dir,
+-            "--ckpt_path", 'DRBNet/ckpts/single/single_image_defocus_deblurring.pth',
++            "--ckpt_path", 'ckpts/single/single_image_defocus_deblurring.pth',
+             "--net_mode", "single",
+             "--save_images"
+         ]
+diff --git a/executor/dehazing/__init__.py b/executor/dehazing/__init__.py
+index 33c9668..625655e 100644
+--- a/executor/dehazing/__init__.py
++++ b/executor/dehazing/__init__.py
+@@ -1,4 +1,5 @@
+ import os
++from pathlib import Path
+ 
+ from ..tool import Tool
+ from ..multitask_tools import *
+@@ -10,19 +11,31 @@ __all__ = ['dehazing_toolbox']
+ class DehazeFormer(Tool):
+     """[Vision Transformers for Single Image Dehazing (TIP 2023)](https://doi.org/10.1109/TIP.2023.3256763)"""    
+ 
+-    def __init__(self):
++    def __init__(self, variant=None):
++        variants = {
++            None: ("dehazeformer-b", "saved_models"),
++            "outdoor_b": ("dehazeformer-b", "saved_models/outdoor"),
++            "indoor_b": ("dehazeformer-b", "saved_models/indoor"),
++            "indoor_l": ("dehazeformer-l", "saved_models/indoor"),
++        }
++        if variant not in variants:
++            raise ValueError(f"Unknown DehazeFormer variant: {variant}")
++        self.model_name, self.checkpoint_dir = variants[variant]
+         super().__init__(
+-            tool_name="dehazeformer",
++            tool_name="dehazeformer" if variant is None else f"dehazeformer_{variant}",
+             subtask="dehazing",
+             work_dir="DehazeFormer",
+             script_rel_path="inference.py"
+         )
++        self.required_weight_files = [Path(self.checkpoint_dir) / f"{self.model_name}.pth"]
+ 
+     def _get_cmd_opts(self) -> list[str]:
+         return [
+             "--data_dir", self.input_dir,
+             "--result_dir", self.output_dir,
+-            "--save_dir", 'DehazeFormer/saved_models'
++            "--save_dir", self.checkpoint_dir,
++            "--model", self.model_name,
++            "--num_workers", "0",
+         ]
+     
+ 
+@@ -36,12 +49,14 @@ class RIDCP(Tool):
+             work_dir="RIDCP_dehazing",
+             script_rel_path="inference_ridcp.py"
+         )
++        # 权重文件（相对 work_dir），用于 M07 可用性检查
++        self.required_weight_files = [Path("pretrained_models/pretrained_RIDCP.pth")]
+ 
+     def _get_cmd_opts(self) -> list[str]:
+         return [
+             "-i", self.input_dir,
+             "-o", self.output_dir,
+-            "-w", 'RIDCP_dehazing/pretrained_models/pretrained_RIDCP.pth',
++            "-w", 'pretrained_models/pretrained_RIDCP.pth',
+             "--use_weight",
+             "--alpha", "-21.25"
+         ]
+@@ -52,5 +67,8 @@ dehazing_toolbox = [
+     XRestormer(subtask=subtask),
+     RIDCP(),
+     DehazeFormer(),
++    DehazeFormer("outdoor_b"),
++    DehazeFormer("indoor_b"),
++    DehazeFormer("indoor_l"),
+     MAXIM(subtask=subtask),
+-]
+\ No newline at end of file
++]
+diff --git a/executor/dehazing/configs/xrestormer.yml b/executor/dehazing/configs/xrestormer.yml
+index bc92e23..890d4f6 100644
+--- a/executor/dehazing/configs/xrestormer.yml
++++ b/executor/dehazing/configs/xrestormer.yml
+@@ -37,7 +37,7 @@ network_g:
+ 
+ # path
+ path:
+-  pretrain_network_g: X-Restormer/experiments/pretrained/dehaze_300k.pth
++  pretrain_network_g: experiments/pretrained/dehaze_300k.pth
+   strict_load_g: true
+   resume_state: ~
+   results: ~
+diff --git a/executor/denoising/configs/xrestormer.yml b/executor/denoising/configs/xrestormer.yml
+index 173b2ef..dc43d82 100644
+--- a/executor/denoising/configs/xrestormer.yml
++++ b/executor/denoising/configs/xrestormer.yml
+@@ -37,7 +37,7 @@ network_g:
+ 
+ # path
+ path:
+-  pretrain_network_g: X-Restormer/experiments/pretrained/denoise_300k.pth
++  pretrain_network_g: experiments/pretrained/denoise_300k.pth
+   strict_load_g: true
+   resume_state: ~
+   results: ~
+diff --git a/executor/deraining/__init__.py b/executor/deraining/__init__.py
+index 559de5a..548938f 100644
+--- a/executor/deraining/__init__.py
++++ b/executor/deraining/__init__.py
+@@ -13,4 +13,4 @@ deraining_toolbox = [
+     XRestormer(subtask=subtask),
+     Restormer(subtask=subtask),
+     MPRNet(subtask=subtask),
+-]
+\ No newline at end of file
++]
+diff --git a/executor/deraining/configs/xrestormer.yml b/executor/deraining/configs/xrestormer.yml
+index 15ba92b..c3da582 100644
+--- a/executor/deraining/configs/xrestormer.yml
++++ b/executor/deraining/configs/xrestormer.yml
+@@ -37,7 +37,7 @@ network_g:
+ 
+ # path
+ path:
+-  pretrain_network_g: X-Restormer/experiments/pretrained/derain_155k.pth
++  pretrain_network_g: experiments/pretrained/derain_155k.pth
+   strict_load_g: true
+   resume_state: ~
+   results: ~
+diff --git a/executor/jpeg_compression_artifact_removal/__init__.py b/executor/jpeg_compression_artifact_removal/__init__.py
+index 341287c..2ce2df5 100644
+--- a/executor/jpeg_compression_artifact_removal/__init__.py
++++ b/executor/jpeg_compression_artifact_removal/__init__.py
+@@ -24,7 +24,7 @@ class FBCNN(Tool):
+     def _get_cmd_opts(self) -> list[str]:
+         return [
+             "--input_dir", self.input_dir,
+-            "--weight_dir", 'FBCNN/model_zoo',
++            "--weight_dir", 'model_zoo',
+             "--output_dir", self.output_dir,
+             "--qf", self.qf
+         ]
+diff --git a/executor/motion_deblurring/__init__.py b/executor/motion_deblurring/__init__.py
+index 0845c60..e826330 100644
+--- a/executor/motion_deblurring/__init__.py
++++ b/executor/motion_deblurring/__init__.py
+@@ -13,4 +13,4 @@ motion_deblurring_toolbox = [
+     MPRNet(subtask=subtask),
+     MAXIM(subtask=subtask),
+     XRestormer(subtask=subtask),
+-]
+\ No newline at end of file
++]
+diff --git a/executor/motion_deblurring/configs/xrestormer.yml b/executor/motion_deblurring/configs/xrestormer.yml
+index 02762ac..f729b7c 100644
+--- a/executor/motion_deblurring/configs/xrestormer.yml
++++ b/executor/motion_deblurring/configs/xrestormer.yml
+@@ -37,7 +37,7 @@ network_g:
+ 
+ # path
+ path:
+-  pretrain_network_g: X-Restormer/experiments/pretrained/deblur_300k.pth
++  pretrain_network_g: experiments/pretrained/deblur_300k.pth
+   strict_load_g: true
+   resume_state: ~
+   results: ~
+diff --git a/executor/multitask_tools.py b/executor/multitask_tools.py
+index 987e776..93d60ca 100644
+--- a/executor/multitask_tools.py
++++ b/executor/multitask_tools.py
+@@ -2,6 +2,7 @@ import os
+ from pathlib import Path
+ import yaml
+ import shutil
++import zipfile
+ 
+ from .tool import Tool
+ 
+@@ -115,12 +116,14 @@ class SwinIR(Tool):
+         }
+         self.opt_task, opt_model_names = opt_dict[subtask]
+         self.model_name = opt_model_names[pretrained_on]
++        # 权重文件（相对 work_dir），区分 GAN/PSNR/15/50/40 变体（M07）
++        self.required_weight_files = [Path(f"model_zoo/swinir/{self.model_name}")]
+ 
+     def _get_cmd_opts(self) -> list[str]:
+         """Requires parameter `input_dir: Path`, `output_dir: Path`, `opt_task: str`, and `model_name: str`."""
+         opts = [
+             "--task", self.opt_task,
+-            "--model_path", f"SwinIR/model_zoo/swinir/{self.model_name}",
++            "--model_path", f"model_zoo/swinir/{self.model_name}",
+             "--folder_lq", self.input_dir,
+             "--save_dir", self.output_dir
+         ]
+@@ -154,6 +157,15 @@ class Restormer(Tool):
+             'deraining': 'Deraining'
+         }
+         self.opt_task = opt_dict[subtask]
++        # 权重文件（相对 work_dir），区分各任务（M07）；defocus 权重缺失会被正确识别
++        weight_map = {
++            "Real_Denoising": "Denoising/pretrained_models/real_denoising.pth",
++            "Motion_Deblurring": "Motion_Deblurring/pretrained_models/motion_deblurring.pth",
++            "Single_Image_Defocus_Deblurring":
++                "Defocus_Deblurring/pretrained_models/single_image_defocus_deblurring.pth",
++            "Deraining": "Deraining/pretrained_models/deraining.pth",
++        }
++        self.required_weight_files = [Path(weight_map[self.opt_task])]
+ 
+     def _get_cmd_opts(self) -> list[str]:
+         """Requires parameter `input_dir: Path`, `output_dir: Path`, and `opt_task: str`."""
+@@ -228,6 +240,40 @@ class MAXIM(Tool):
+             # 'retouching': ('Enhancement', 'maxim_ckpt_Enhancement_FiveK_checkpoint.npz')
+         }
+         self.opt_task, self.opt_ckpt_name = opt_dict[subtask]
++        # 权重文件（相对 work_dir），MAXIM 各任务 ckpt 不同（M07）
++        self.required_weight_files = [Path(f"maxim/pretrained_models/{self.opt_ckpt_name}")]
++        dedicated_python = Path(__file__).resolve().parents[1] / ".venvs/maxim-jax/bin/python"
++        override = os.environ.get("MAIR_MAXIM_PYTHON")
++        if override:
++            self.python_executable = Path(override)
++        elif dedicated_python.exists():
++            self.python_executable = dedicated_python
++
++    def _get_cmd(self):
++        # Do not let JAX reserve most of the GPU alongside the DepictQA service,
++        # and do not silently run a purported GPU experiment on CPU.
++        return ("XLA_PYTHON_CLIENT_PREALLOCATE=false JAX_PLATFORMS=cuda "
++                "XLA_FLAGS=--xla_gpu_autotune_level=0 " + super()._get_cmd())
++
++    def _weights_present(self):
++        # A truncated NPZ can exist on disk but is not a usable checkpoint.
++        if not super()._weights_present():
++            return False
++        return all(zipfile.is_zipfile(self.work_dir / path)
++                   for path in self.required_weight_files)
++
++    def _invoke(self):
++        try:
++            super()._invoke()
++        finally:
++            # MAXIM creates an input/input directory. On a subprocess error this
++            # must also be removed, otherwise every subsequent candidate fails
++            # the single-input precheck.
++            temporary = getattr(self, "rqd_input_dir", None)
++            if temporary is not None and temporary.exists():
++                if temporary.resolve().parent != self.input_dir.resolve():
++                    raise RuntimeError("Unexpected MAXIM temporary input path")
++                shutil.rmtree(temporary)
+ 
+     def _preprocess(self):
+         """Requires parameter `input_dir: Path`. MAXIM requires that the option `input_dir` should contain a directory `input` that contains the input image."""
+@@ -243,7 +289,7 @@ class MAXIM(Tool):
+         """Requires parameter `input_dir: Path`, `output_dir: Path`, `opt_task: str`, and `opt_ckpt_name: str`."""
+         return [
+             "--task", self.opt_task,
+-            "--ckpt_path", f"maxim/maxim/pretrained_models/{self.opt_ckpt_name}",
++            "--ckpt_path", f"maxim/pretrained_models/{self.opt_ckpt_name}",
+             "--input_dir", self.input_dir,
+             "--output_dir", self.output_dir,
+             "--has_target=False"
+diff --git a/executor/super_resolution/__init__.py b/executor/super_resolution/__init__.py
+index 6d45fd6..8a3dc0d 100644
+--- a/executor/super_resolution/__init__.py
++++ b/executor/super_resolution/__init__.py
+@@ -30,19 +30,25 @@ class DiffBIR(Tool):
+             work_dir="DiffBIR",
+             script_rel_path="inference.py"
+         )
++        # 权重文件（相对 work_dir），用于 M07 可用性检查
++        self.required_weight_files = [
++            Path("weights/general_full_v1.ckpt"),
++            Path("weights/general_swinir_v1.ckpt"),
++        ]
+ 
+     def _get_cmd_opts(self) -> list[str]:
+         return [
+             "--input", self.input_dir,
+             "--config", Path(f"executor/{self.subtask}/configs/diffbir.yml").resolve(),
+-            "--ckpt", "DiffBIR/weights/general_full_v1.ckpt",
++            "--ckpt", "weights/general_full_v1.ckpt",
+             "--reload_swinir",
+-            "--swinir_ckpt", "DiffBIR/weights/general_swinir_v1.ckpt",
++            "--swinir_ckpt", "weights/general_swinir_v1.ckpt",
+             "--steps", "50",
+             "--sr_scale", "4",
+             "--color_fix_type", "wavelet",
+             "--output", self.output_dir,
+-            "--device", "cuda"
++            "--device", "cuda",
++            "--tiled"
+         ]
+     
+ 
+diff --git a/executor/super_resolution/configs/diffbir.yml b/executor/super_resolution/configs/diffbir.yml
+index ab2f042..9f05dd1 100644
+--- a/executor/super_resolution/configs/diffbir.yml
++++ b/executor/super_resolution/configs/diffbir.yml
+@@ -84,7 +84,7 @@ params:
+   cond_stage_config:
+     target: ldm.modules.encoders.modules.FrozenOpenCLIPEmbedder
+     params:
+-      version: "DiffBIR/open_clip_pytorch_model.bin"
++      version: "weights/open_clip_pytorch_model.bin"
+       freeze: True
+       layer: "penultimate"
+ 
+diff --git a/executor/super_resolution/configs/hat.yml b/executor/super_resolution/configs/hat.yml
+index 641d851..053a658 100644
+--- a/executor/super_resolution/configs/hat.yml
++++ b/executor/super_resolution/configs/hat.yml
+@@ -38,7 +38,7 @@ network_g:
+ 
+ # path
+ path:
+-  pretrain_network_g: HAT/experiments/pretrained_models/Real_HAT_GAN_SRx4_sharper.pth
++  pretrain_network_g: experiments/pretrained_models/Real_HAT_GAN_SRx4_sharper.pth
+   strict_load_g: true
+   param_key_g: 'params_ema'
+   results: ~
+diff --git a/executor/super_resolution/configs/xrestormer.yml b/executor/super_resolution/configs/xrestormer.yml
+index e147ed7..8041663 100644
+--- a/executor/super_resolution/configs/xrestormer.yml
++++ b/executor/super_resolution/configs/xrestormer.yml
+@@ -37,7 +37,7 @@ network_g:
+ 
+ # path
+ path:
+-  pretrain_network_g: X-Restormer/experiments/pretrained/sr_300k.pth
++  pretrain_network_g: experiments/pretrained/sr_300k.pth
+   strict_load_g: true
+   resume_state: ~
+   results: ~
+diff --git a/executor/tool.py b/executor/tool.py
+index ab7b462..5d4decb 100644
+--- a/executor/tool.py
++++ b/executor/tool.py
+@@ -2,9 +2,17 @@ import os
+ from pathlib import *
+ import subprocess
+ import time
++import shlex
+ from typing import Optional
+ 
+ 
++# 权重文件扩展名（用于 M07 可用性检查）
++WEIGHT_EXTS = {".pth", ".ckpt", ".npz", ".pytorch", ".safetensors", ".pt", ".onnx"}
++
++# 工具可用性缓存（工具是 executor 单例，进程内稳定）
++_availability_cache: dict = {}
++
++
+ class Tool:
+     """Abstract class for a tool.
+ 
+@@ -25,6 +33,9 @@ class Tool:
+         self.subtask: str = subtask
+         self.work_dir: Optional[Path] = None
+         self.script_path: Optional[Path] = None
++        # 具体权重文件（相对 work_dir），用于 M07 可用性检查；为空则退回"任意权重"检查
++        self.required_weight_files: list[Path] = []
++        self.python_executable: Optional[Path] = None
+         if work_dir is not None:
+             assert script_rel_path is not None, "If `work_dir` is provided, `script_rel_path` should also be provided."
+             self.work_dir: Path = Path().resolve() / 'executor' / subtask / 'tools' / work_dir
+@@ -64,21 +75,81 @@ class Tool:
+     def _invoke(self) -> None:
+         self._preprocess()
+         cmd = self._get_cmd()
+-        subprocess.run(cmd, cwd=self.work_dir, shell=True, check=True,
+-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
++        proc = subprocess.run(cmd, cwd=self.work_dir, shell=True,
++                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
++        if proc.returncode != 0:
++            stderr = proc.stderr.decode("utf-8", errors="replace").strip()
++            raise RuntimeError(
++                f"Tool {self.tool_name} failed (exit {proc.returncode}): {stderr[-2000:]}"
++            )
+         self._postprocess()
+ 
+     def _get_cmd(self) -> str:
+         opts = self._get_cmd_opts()
++        return shlex.join([str(self._python_path()), str(self.script_path), *map(str, opts)])
++
++    def _python_path(self) -> Path:
++        if self.python_executable is not None:
++            return Path(self.python_executable)
+         env_name = self.tool_name.split('_')[0]
+-        cmd = f"conda run -n {env_name} python '{self.script_path}'"
+-        for opt in opts:
+-            cmd += f" '{opt}'"
+-        return cmd
+-    
++        return Path(f"/root/miniconda3/envs/{env_name}/bin/python")
++
+     def _get_cmd_opts(self, *args) -> list[str]:
+         raise NotImplementedError
+ 
++    # —— 可用性检查（M07）——
++    @staticmethod
++    def _exists(p: Path) -> bool:
++        """exists() 的安全包装：无权限/OSError 视为不存在（不崩溃）。"""
++        try:
++            return Path(p).exists()
++        except (PermissionError, OSError):
++            return False
++
++    def availability(self) -> dict:
++        """返回 {code, env, weights, available}：脚本代码、conda 环境、权重是否齐备。
++
++        纯 Python 工具（如 brightening）在主进程内运行，无外部脚本/环境/权重依赖。
++        """
++        key = (id(self), str(self._python_path()))
++        if key in _availability_cache:
++            return _availability_cache[key]
++        if self.script_path is None:
++            info = {"code": True, "env": True, "weights": True, "available": True}
++        else:
++            code = self._exists(self.script_path)
++            env = self._exists(self._python_path())
++            weights = self._weights_present()
++            info = {"code": code, "env": env, "weights": weights,
++                    "available": code and env and weights}
++        _availability_cache[key] = info
++        return info
++
++    def available(self) -> bool:
++        return self.availability()["available"]
++
++    def _weights_present(self) -> bool:
++        """工具是否具备权重：声明了 required_weight_files 则逐个校验，否则
++        退回"目录下存在任意权重文件"（此时同 work_dir 多变体工具可能被高估）。"""
++        if self.work_dir is None:
++            return False
++        try:
++            if not self.work_dir.exists():
++                return False
++            if self.required_weight_files:
++                return all(
++                    self._exists(self.work_dir / f) for f in self.required_weight_files
++                )
++            for p in self.work_dir.rglob("*"):
++                try:
++                    if p.is_file() and p.suffix.lower() in WEIGHT_EXTS:
++                        return True
++                except (PermissionError, OSError):
++                    continue
++        except (PermissionError, OSError):
++            return False
++        return False
++
+     def _preprocess(self):
+         """May be needed by the specific tool."""        
+         pass
+diff --git a/llm/depictqa.py b/llm/depictqa.py
+index ea7ce60..15994fa 100644
+--- a/llm/depictqa.py
++++ b/llm/depictqa.py
+@@ -4,6 +4,7 @@ import logging
+ from typing import Optional
+ 
+ from .base_llm import BaseLLM
++from runtime_safety import post_local, comparison_service
+ from pipeline.prompts import depictqa_evaluate_degradation_prompt, depictqa_compare_prompt
+ from utils.custom_types import Degradation, Level
+ 
+@@ -73,7 +74,7 @@ class DepictQA(BaseLLM):
+             )
+             url = "http://127.0.0.1:5001/evaluate_degradation"
+             payload = {"imageA_path": img.resolve(), "prompt": prompt}
+-            rsp: str = requests.post(url, data=payload).json()["answer"]
++            rsp: str = post_local(url, payload)
+             assert rsp in levels, f"Unexpected response from DepictQA: {list(rsp)}"
+             res.append((degradation, rsp))
+ 
+@@ -90,7 +91,8 @@ class DepictQA(BaseLLM):
+             "imageB_path": img2.resolve(),
+             "prompt": prompt
+         }
+-        rsp: str = requests.post(url, data=payload).json()["answer"]
++        with comparison_service():
++            rsp: str = post_local(url, payload)
+ 
+         if "A" in rsp and "B" not in rsp:
+             choice = "former"
+diff --git a/llm/gpt4.py b/llm/gpt4.py
+index a53907c..7732ead 100644
+--- a/llm/gpt4.py
++++ b/llm/gpt4.py
+@@ -5,6 +5,7 @@ from typing import Callable, Optional
+ from time import sleep
+ import random
+ import re
++import json
+ 
+ from .base_llm import BaseLLM
+ from utils.misc import encode_img
+@@ -29,6 +30,7 @@ class GPT4(BaseLLM):
+         )  # set attributes: cfg, logger, silent
+ 
+         self.api_key = self.cfg["OPENAI_API_KEY"]
++        self.base_url = self.cfg.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+         if model is None:
+             self.model = self.cfg["OPENAI_MODEL"]
+         else:
+@@ -50,20 +52,49 @@ class GPT4(BaseLLM):
+               img_path_lst: Optional[list[Path]] = None,
+               prompt: str = "",
+               format_check: Optional[Callable[[object], None]] = None,
++              max_format_retries: int = 5,
+               ) -> tuple[str, str]:
+-        headers, payload = self._prepare_for_request(
+-            prompt, img_path_lst)
++        n_format_retries = 0
++        current_prompt = prompt
++        token_budget = self.max_tokens
++        truncation_retries = 0
+         while True:
++            headers, payload = self._prepare_for_request(
++                current_prompt, img_path_lst)
++            payload["max_tokens"] = token_budget
+             response = self._send_request(headers, payload)
+ 
+             usage = response.json()["usage"]
+             self.prompt_tokens += usage["prompt_tokens"]
+             self.completion_tokens += usage["completion_tokens"]
+ 
+-            rsp_text: str = response.json()['choices'][0]['message']['content']
++            choice = response.json()['choices'][0]
++            rsp_text: str = choice['message'].get('content') or ''
++            if choice.get('finish_reason') == 'length':
++                self._log(f"Truncated response: budget={token_budget}, "
++                          f"completion_tokens={usage.get('completion_tokens')}, "
++                          f"content_chars={len(rsp_text)}", level='warning')
++                if truncation_retries >= 2 or token_budget >= 32768:
++                    raise RuntimeError('LLM output remains truncated after bounded token-budget retries')
++                token_budget = min(token_budget * 2, 32768)
++                truncation_retries += 1
++                # Retry the same request, retaining model and thinking settings.
++                # A truncated answer is not a JSON syntax correction request.
++                continue
++            if not rsp_text.strip():
++                raise RuntimeError('LLM returned empty content without a usable final answer')
+             if format_check is not None:
+-                valid, rsp_text = self._check_syntax(rsp_text, format_check)
++                valid, rsp_text, err = self._check_syntax(rsp_text, format_check)
+                 if not valid:
++                    n_format_retries += 1
++                    if n_format_retries > max_format_retries:
++                        raise RuntimeError(
++                            "Too many format-check failures when querying LLM.")
++                    current_prompt = prompt + (
++                        "\n\n[Format correction] Your previous output was rejected because "
++                        + err + ". Your previous output was:\n" + rsp_text +
++                        "\nPlease output ONLY valid JSON (double quotes, no code blocks, "
++                        "no markdown, no extra text).")
+                     continue
+             return prompt, rsp_text
+ 
+@@ -120,8 +151,14 @@ class GPT4(BaseLLM):
+         backoff_delay = initial_delay
+         while True:
+             try:
+-                response = requests.post("https://api.openai.com/v1/chat/completions",
+-                                         headers=headers, json=payload)
++                # response = requests.post("https://api.openai.com/v1/chat/completions",
++                #                          headers=headers, json=payload)
++                response = requests.post(
++                    f"{self.base_url}/chat/completions",
++                    headers=headers,
++                    json=payload,
++                    timeout=(10, 240) if payload.get("max_tokens", 0) > self.max_tokens else 60,
++                )
+                 is_valid, recommended_delay = self._check_response(response)
+                 if is_valid:
+                     return response
+@@ -142,7 +179,7 @@ class GPT4(BaseLLM):
+                 delay = backoff_delay
+             self._log(
+                 f"Retrying in {delay:.3f} seconds...", level='warning')
+-            sleep(delay)
++            sleep(min(delay, 60))
+ 
+     def _check_response(self, response: requests.Response) -> tuple[bool, Optional[float]]:
+         """Checks if the response is valid. If error occurs, gets the recommended delay if any.
+@@ -178,31 +215,37 @@ class GPT4(BaseLLM):
+ 
+         return True, None
+ 
++    @staticmethod
++    def _safe_parse_json(text: str):
++        """把 LLM 输出解析为 JSON 对象；支持被 ```json 包裹的情况。"""
++        candidates = [text, text.strip().strip("`").lstrip("json").lstrip("JSON").strip()]
++        for candidate in candidates:
++            try:
++                obj = json.loads(candidate)
++                if isinstance(obj, (dict, list)):
++                    return obj
++            except Exception:
++                continue
++        return None
++
+     def _check_syntax(self, rsp_text: str, format_check: Callable[[object], None]
+-                      ) -> tuple[bool, str]:
++                      ) -> tuple[bool, str, str]:
+         """Checks whether the response is a valid Python object and follows the specified format. 
+         If valid, returns the processed response (the valid response may be wrapped in something)."""
+-        # Check if the response is a valid Python object
+-        try:
+-            obj = eval(rsp_text)
+-        except:
+-            # GPT may wrap the response in a code block
+-            inner_rsp_text = rsp_text.strip("```").lstrip("json").strip()
+-            try:
+-                obj = eval(inner_rsp_text)
+-                rsp_text = inner_rsp_text
+-            except:
+-                self._log("Failed to parse the response:", level='warning')
+-                self._log(rsp_text, level='warning')
+-                return False, ""
++        # 安全解析：JSON 优先（支持 ```json 包裹），替换原 eval
++        obj = self._safe_parse_json(rsp_text)
++        if obj is None:
++            self._log("Failed to parse the response as JSON:", level='warning')
++            self._log(rsp_text, level='warning')
++            return False, "", "the output is not valid JSON"
+         # Check if the response follows the specified format
+         try:
+             format_check(obj)
+-        except AssertionError as e:
++        except (AssertionError, TypeError, ValueError, KeyError) as e:
+             self._log(f"Failed to pass the format check: {e}", level='warning')
+             self._log(f"Response: {obj}", level='warning')
+-            return False, ""
+-        return True, rsp_text
++            return False, "", f"format check failed: {e}"
++        return True, json.dumps(obj), ""
+     
+     def _post_process(self):
+         """Logs the token usage and cost."""        
+diff --git a/pipeline/iragent.py b/pipeline/iragent.py
+index f9d3af0..438f545 100644
+--- a/pipeline/iragent.py
++++ b/pipeline/iragent.py
+@@ -9,6 +9,7 @@ from typing import Optional
+ 
+ from llm import GPT4, DepictQA
+ from . import prompts
++from runtime_safety import parse_response
+ from executor import executor, Tool
+ from utils.img_tree import ImgTree
+ from utils.logger import get_logger
+@@ -220,7 +221,7 @@ class IRAgent:
+         if self.evaluate_degradation_by == "gpt4v":
+             evaluation = self.evaluate_degradation_by_gpt4v()
+         else:
+-            evaluation = eval(
++            evaluation = parse_response(
+                 self.depictqa(Path(self.cur_node["img_path"]), task="eval_degradation")
+             )
+         self.workflow_logger.info(f"Evaluation: {evaluation}")
+@@ -247,7 +248,7 @@ class IRAgent:
+                 "low resolution"
+             }, f"Invalid degradation: {rsp_degradations}."
+ 
+-        evaluation = eval(
++        evaluation = parse_response(
+             self.gpt4(
+                 prompt=prompts.gpt_evaluate_degradation_prompt,
+                 img_path=Path(self.cur_node["img_path"]),
+@@ -263,12 +264,12 @@ class IRAgent:
+ 
+         degradations = [self.subtask_degra_dict[subtask] for subtask in agenda]
+         if self.with_retrieval:
+-            plan = self.schedule_w_retrieval(degradations, agenda, ps)
++            plan = self.schedule_w_retriparse_response(degradations, agenda, ps)
+         else:
+-            plan = self.schedule_wo_retrieval(degradations, agenda, ps)
++            plan = self.schedule_wo_retriparse_response(degradations, agenda, ps)
+         return plan
+ 
+-    def schedule_w_retrieval(
++    def schedule_w_retriparse_response(
+         self, degradations: list[Degradation], agenda: list[Subtask], ps: str
+     ) -> list[Subtask]:
+         def check_order(schedule: object):
+@@ -286,7 +287,7 @@ class IRAgent:
+             ) + ps,
+             format_check=check_order,
+         )
+-        schedule = eval(schedule)
++        schedule = parse_response(schedule)
+         self.workflow_logger.info(f"Insights: {schedule['thought']}")
+         return schedule["order"]
+ 
+@@ -301,7 +302,7 @@ class IRAgent:
+         self.workflow_logger.info(f"Insights: {insights}")
+         return insights
+ 
+-    def schedule_wo_retrieval(
++    def schedule_wo_retriparse_response(
+         self, degradations: list[Degradation], agenda: list[Subtask], ps: str
+     ) -> list[Subtask]:
+         insights: str = self.reason_to_schedule(degradations, agenda)
+@@ -316,7 +317,7 @@ class IRAgent:
+             ) + ps,
+             format_check=check_order,
+         )
+-        return eval(order)
++        return parse_response(order)
+ 
+     def execute_subtask(self, cache: Optional[Path]) -> bool:
+         """Invokes tools to try to execute the top subtask in `self.plan` on `self.cur_node["img_path"]`, the directory of which is "0-img". Returns success or not. Updates `self.plan` and `self.cur_node`. Generates a directory parallel to "0-img", containing multiple directories, each of which contains outputs of a tool.\n
+@@ -358,11 +359,25 @@ class IRAgent:
+ 
+             # invoke tool
+             if cache is None:
+-                tool(
+-                    input_dir=Path(self.cur_node["img_path"]).parent,
+-                    output_dir=output_dir,
+-                    silent=True,
+-                )
++                try:
++                    tool(
++                        input_dir=Path(self.cur_node["img_path"]).parent,
++                        output_dir=output_dir,
++                        silent=True,
++                    )
++                except Exception as error:
++                    self.work_mem.setdefault("tool_errors", []).append({
++                        "subtask": subtask, "tool": tool.tool_name,
++                        "error": f"{type(error).__name__}: {error}",
++                    })
++                    self.workflow_logger.exception(f"Tool {tool.tool_name} failed; trying next tool")
++                    # Keep failed outputs outside img_tree: its HTML renderer
++                    # expects every tool node to contain a readable image.
++                    failed_dir = self.log_dir / "failed_tools" / f"{len(self.work_mem['tool_errors']):04d}_{tool.tool_name}"
++                    failed_dir.parent.mkdir(parents=True, exist_ok=True)
++                    shutil.move(str(tool_dir), str(failed_dir))
++                    self._dump_summary()
++                    continue
+             else:
+                 dst_path = output_dir / "output.png"
+                 rel_path = dst_path.relative_to(self.img_tree_dir)
+@@ -387,6 +402,8 @@ class IRAgent:
+                 break
+ 
+         else:  # no result with "very low" degradation level
++            if not res_degra_level_dict:
++                raise RuntimeError(f"All candidate tools failed for {subtask}; see tool_errors")
+             for res_level in self.levels[1:]:
+                 if res_level in res_degra_level_dict:
+                     candidates = res_degra_level_dict[res_level]
+@@ -420,7 +437,7 @@ class IRAgent:
+         if self.reflect_by == "gpt4v":
+             level = self.evaluate_tool_result_by_gpt4v(img_path, degradation)
+         else:
+-            level = eval(
++            level = parse_response(
+                 self.depictqa(
+                     img_path=img_path, task="eval_degradation", degradation=degradation
+                 )
+@@ -439,7 +456,7 @@ class IRAgent:
+             severity = evaluation["severity"]
+             assert severity in self.levels, f"Invalid severity: {severity}."
+ 
+-        degra_level = eval(
++        degra_level = parse_response(
+             self.gpt4(
+                 prompt=prompts.gpt_evaluate_tool_result_prompt.format(
+                     degradation=degradation
+@@ -500,7 +517,7 @@ class IRAgent:
+                 "neither",
+             }, f"Invalid choice: {comparison['choice']}."
+ 
+-        comparison: dict = eval(
++        comparison: dict = parse_response(
+             self.gpt4(
+                 prompt=prompts.gpt_compare_prompt,
+                 img_path=[img1, img2],
+@@ -595,7 +612,7 @@ class IRAgent:
+             for adjusted_plan in self.work_mem["plan"]["adjusted"]:
+                 failed = adjusted_plan["failed"]
+                 failed_done, failed_planned = failed.split(" + ")
+-                failed_done, failed_planned = eval(failed_done), eval(failed_planned)
++                failed_done, failed_planned = parse_response(failed_done), parse_response(failed_planned)
+                 if failed_done == done_subtasks:
+                     self.plan = failed_planned
+                     self.workflow_logger.info(f"Pick up the failed plan {failed_done} + {failed_planned}.")

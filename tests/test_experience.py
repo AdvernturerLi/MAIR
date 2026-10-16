@@ -1,4 +1,5 @@
 import json
+import pytest
 
 from scheduler import Scheduler
 
@@ -23,26 +24,27 @@ def _make(tmp_path, experience_path, with_retrieval=True):
     )
 
 
-def test_no_experience_file_switches_to_no_retrieval(tmp_path, monkeypatch):
+def test_default_loads_published_experience(tmp_path, monkeypatch):
     monkeypatch.setattr("scheduler.available_tools", lambda s: [])
     s = _make(tmp_path, experience_path=None)
-    assert s.with_retrieval is False
-    assert s.schedule_experience == ""
-    assert s.experience_source is None
+    assert s.with_retrieval is True
+    assert "followed by super-resolution and then denoising" in s.schedule_experience
+    assert "Section 8" in s.experience_source
+    assert len(s.experience_hash) == 64
 
 
 def test_missing_experience_file_switches(tmp_path, monkeypatch):
     monkeypatch.setattr("scheduler.available_tools", lambda s: [])
-    s = _make(tmp_path, experience_path=tmp_path / "missing.json")
-    assert s.with_retrieval is False
+    with pytest.raises(ValueError):
+        _make(tmp_path, experience_path=tmp_path / "missing.json")
 
 
 def test_empty_distilled_switches(tmp_path, monkeypatch):
     monkeypatch.setattr("scheduler.available_tools", lambda s: [])
     exp = tmp_path / "exp.json"
     exp.write_text(json.dumps({"distilled": ""}))
-    s = _make(tmp_path, experience_path=exp)
-    assert s.with_retrieval is False
+    with pytest.raises(ValueError):
+        _make(tmp_path, experience_path=exp)
 
 
 def test_valid_experience_loaded_with_source(tmp_path, monkeypatch):

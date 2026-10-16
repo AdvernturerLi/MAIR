@@ -1,6 +1,12 @@
 from instruction import InstructionSpec, parse_keep, parse_only
 
 
+def test_mixed_english_actions():
+    inst = InstructionSpec.parse("remove noise and preserve haze")
+    assert inst.keep == {"haze"}
+    assert inst.should_process("noise")
+
+
 def test_keep_haze_but_remove_rain():
     inst = InstructionSpec.parse("保留雾但去雨")
     assert inst.keep == {"haze"}

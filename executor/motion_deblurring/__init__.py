@@ -11,6 +11,6 @@ subtask = 'motion_deblurring'
 motion_deblurring_toolbox = [
     Restormer(subtask=subtask), 
     MPRNet(subtask=subtask),
-    # MAXIM(subtask=subtask),  # CPU慢，暂时排除
+    MAXIM(subtask=subtask),
     XRestormer(subtask=subtask),
 ]

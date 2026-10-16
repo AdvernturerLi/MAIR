@@ -33,7 +33,7 @@ _KEEP_MARKERS = ["keep", "retain", "preserve", "except", "保留", "不要处理
 _ONLY_MARKERS = ["only", "just", "只", "仅", "只要"]
 
 # 子句分隔符：只切明确转折/列举，不切 "和/与/and"（避免把 "保留雾和雨" 拆错）
-_CLAUSE_RE = re.compile(r"[。；;,，]|但是|但|but|而", re.IGNORECASE)
+_CLAUSE_RE = re.compile(r"[。；;,，]|但是|但|\bbut\b|而|\band\b(?=\s+(?:preserve|keep|retain|remove|denoise|derain|dehaze)\b)", re.IGNORECASE)
 
 
 def _split_clauses(instruction: str) -> list[str]:

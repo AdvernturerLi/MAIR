@@ -1,5 +1,6 @@
 # 密钥（含 API key，勿提交）
 config.yml
+config.*.runtime.yml
 
 # 工具代码（软链接到 AgenticIR 的 13G 工具 repo，另行部署）
 executor/*/tools/
@@ -25,3 +26,23 @@ experiments/functional_verification/runs/
 experiments/baselines/*/runs/
 experiments/baselines/*/preflight/
 *.tar.gz
+
+# Local audit/test scratch and host keys are not source artifacts.
+experiments/paper_audit_20261015/pytest-tmp*/
+experiments/paper_audit_20261015/known_hosts*
+experiments/paper_audit_20261015/server_validation/*.png
+.venvs/
+.pytest_cache/
+
+# Generated experiment artifacts; source snapshots live in reproduction/.
+experiments/test160_noexp_20261015/
+experiments/baselines/gt_hq/
+experiments/paper_audit_20261015/
+experiments/results/
+experiments/analysis/
+experiments/model_cache/
+experiments/experience/
+**/runtime_config.yml
+*.pt
+*.pth
+*.safetensors

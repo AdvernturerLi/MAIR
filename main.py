@@ -8,6 +8,7 @@ import yaml
 from scheduler import Scheduler
 from expert import Expert
 from trajectory import Trajectory
+from paper_resources import validate_paper_resources, ALGORITHM_VERSION
 
 
 def _is_within(path: Path, ancestor: Path) -> bool:
@@ -46,7 +47,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=Path("output"), help="输出根目录")
     parser.add_argument("--config", type=Path, default=Path("config.yml"))
     parser.add_argument("--experience", type=Path, default=None,
-                        help="调度经验 json（含 distilled 与 source）")
+                        help="调度经验 JSON；默认使用论文 Sec.8 公开经验")
     parser.add_argument("--instruction", type=str, default="",
                         help="用户指令（如：保留雾但去雨）")
     parser.add_argument("--no-retrieval", action="store_true", help="阶段内排序不用经验")
@@ -60,28 +61,43 @@ def main() -> None:
 
     trajectory = Trajectory(args.output, input_path=args.input)
 
-    scheduler = Scheduler(
-        config_path=args.config,
-        experience_path=args.experience,
-        with_retrieval=not args.no_retrieval,
-        silent=args.silent,
-        trajectory=trajectory,
-    )
+    try:
+        scheduler = Scheduler(
+            config_path=args.config,
+            experience_path=args.experience,
+            with_retrieval=not args.no_retrieval,
+            silent=args.silent,
+            trajectory=trajectory,
+        )
+        if scheduler._cfg.get("REQUIRE_PAPER_RESOURCES", False):
+            validate_paper_resources(scheduler)
+    except Exception as e:
+        trajectory.record("initialization_error", error=f"{type(e).__name__}: {e}")
+        trajectory.save()
+        raise
 
     # 记录实际生效的模型/配置/指令（M08/M10）；模型取已构造客户端的解析结果
     # （gpt4 内部已处理环境变量覆盖，避免轨迹记错模型）
     cfg = {}
     if args.config.exists():
-        cfg = yaml.safe_load(args.config.read_text()) or {}
+        cfg = yaml.safe_load(args.config.read_text(encoding="utf-8")) or {}
     trajectory.record(
         "config",
+        algorithm_version=ALGORITHM_VERSION,
         provider=getattr(scheduler.gpt4, "base_url", None),
         model=getattr(scheduler.gpt4, "model", None),
         low_res_max_side=cfg.get("LOW_RES_MAX_SIDE", 300),
         stop_threshold=cfg.get("STOP_THRESHOLD", "low"),
         instruction=args.instruction,
         input_hash=trajectory.input_hash,
-        experience=args.experience,
+        experience=getattr(scheduler, "experience_path", None),
+        experience_sha256=getattr(scheduler, "experience_hash", None),
+        experience_enabled=scheduler.with_retrieval,
+        paper_tools_only=bool(cfg.get("USE_PAPER_TOOLSET", False) or cfg.get("REQUIRE_PAPER_RESOURCES", False)),
+        maxim_enabled=bool(cfg.get("ENABLE_MAXIM", False)),
+        assumptions={"perception_threshold": cfg.get("PERCEPTION_THRESHOLD", "medium"),
+                     "size_heuristic_sr": scheduler.use_size_heuristic_sr,
+                     "low_res_as_blur": cfg.get("LOW_RES_AS_BLUR", True)},
     )
 
     try:
@@ -98,16 +114,18 @@ def main() -> None:
         shutil.copy(args.input, cur_img)
 
         # 3. 依次执行专家
-        for subtask in plan:
+        for index, subtask in enumerate(plan):
             degradation = scheduler.subtask_degra_dict[subtask]
             expert = Expert(subtask, degradation, config_path=args.config,
                             silent=args.silent, trajectory=trajectory)
-            out = expert.restore(cur_img, args.output, instruction=args.instruction)
+            out = expert.restore(cur_img, args.output, instruction=args.instruction,
+                                remaining_degradations=[scheduler.subtask_degra_dict[s]
+                                                        for s in plan[index:]])
             if out is None:
                 print(f"[MAIR] 专家 {subtask} 失败，中止", flush=True)
                 trajectory.record("abort", subtask=subtask, reason="expert returned None")
                 trajectory.save()
-                return
+                raise RuntimeError(f"Expert failed: {subtask}")
             cur_img = out
 
         # 4. 保存最终结果

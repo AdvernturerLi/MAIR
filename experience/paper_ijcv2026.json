@@ -1,0 +1,6 @@
+{
+  "source": "Multi-Agent Image Restoration, IJCV (2026) 134:205, DOI 10.1007/s11263-026-02792-5, Section 8, page 17, Experience e",
+  "kind": "published_author_experience",
+  "distilled": "Stage 2: In tasks involving blur removal, noise removal, and low resolution, it is often better to first perform deblurring, followed by super-resolution and then denoising. However, when the task does not involve super-resolution, denoising should be carried out first, followed by deblurring.\nStage 3: Deraining should be performed before dehazing and low-light enhancement.",
+  "note": "Transcribed from the published template, not independently distilled. This repository does not contain the authors' underlying 13000+ attempt records."
+}

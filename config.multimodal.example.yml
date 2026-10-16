@@ -1,0 +1,17 @@
+# Paper workflow with an explicitly identified alternative vision-language model.
+# Fill provider/model for an OpenAI-compatible multimodal endpoint.
+# Prefer supplying the key through OPENAI_API_KEY in the runtime environment.
+OPENAI_API_KEY: ""
+OPENAI_BASE_URL: "https://api.deepseek.com"
+OPENAI_MODEL: "deepseek-v4-flash-vision-exp"
+MAX_TOKENS: 8192
+TEMPERATURE: 0.0
+STOP_THRESHOLD: "low"
+USE_SIZE_HEURISTIC_FOR_SR: true
+LOW_RES_MAX_SIDE: 300
+LOW_RES_AS_BLUR: true
+PERCEPTION_THRESHOLD: "medium"
+USE_PAPER_TOOLSET: true
+ENABLE_MAXIM: false  # Enable only after validating the dedicated JAX/Flax runtime.
+# Alternative model + available subset; do not claim the original configuration.
+REQUIRE_PAPER_RESOURCES: false

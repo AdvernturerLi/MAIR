@@ -1,4 +1,6 @@
 from pathlib import Path
+import zipfile
+import pytest
 
 import executor.tool as tool_mod
 import registry
@@ -23,13 +25,13 @@ def test_weights_present_specific_files(tmp_path):
 
 def test_restormer_required_weight_files():
     from executor.multitask_tools import Restormer
-    assert str(Restormer("defocus_deblurring").required_weight_files[0]) == \
+    assert Restormer("defocus_deblurring").required_weight_files[0].as_posix() == \
         "Defocus_Deblurring/pretrained_models/single_image_defocus_deblurring.pth"
-    assert str(Restormer("deraining").required_weight_files[0]) == \
+    assert Restormer("deraining").required_weight_files[0].as_posix() == \
         "Deraining/pretrained_models/deraining.pth"
-    assert str(Restormer("denoising").required_weight_files[0]) == \
+    assert Restormer("denoising").required_weight_files[0].as_posix() == \
         "Denoising/pretrained_models/real_denoising.pth"
-    assert str(Restormer("motion_deblurring").required_weight_files[0]) == \
+    assert Restormer("motion_deblurring").required_weight_files[0].as_posix() == \
         "Motion_Deblurring/pretrained_models/motion_deblurring.pth"
 
 
@@ -53,3 +55,62 @@ def test_registry_has_all_declared_subtasks():
     for subtask in DEGRADATION_TO_SUBTASK.values():
         assert subtask in registry.REGISTRY, f"注册表缺 subtask: {subtask}"
         assert len(registry.REGISTRY[subtask]) >= 1
+
+
+def test_dehazeformer_variants_have_distinct_checkpoints():
+    from executor.dehazing import DehazeFormer
+    for variant, model, folder in [
+        ("outdoor_b", "dehazeformer-b", "outdoor"),
+        ("indoor_b", "dehazeformer-b", "indoor"),
+        ("indoor_l", "dehazeformer-l", "indoor"),
+    ]:
+        tool = DehazeFormer(variant)
+        assert tool.tool_name == f"dehazeformer_{variant}"
+        assert tool.required_weight_files == [Path(f"saved_models/{folder}/{model}.pth")]
+        tool.input_dir, tool.output_dir = Path("input"), Path("output")
+        opts = tool._get_cmd_opts()
+        assert opts[opts.index("--model") + 1] == model
+        assert opts[opts.index("--save_dir") + 1] == f"saved_models/{folder}"
+
+
+def test_maxim_rejects_truncated_npz(tmp_path):
+    from executor.multitask_tools import MAXIM
+    tool = MAXIM("denoising")
+    tool.work_dir = tmp_path
+    path = tmp_path / tool.required_weight_files[0]
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"partial download")
+    assert not tool._weights_present()
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("example.npy", b"structure only for test")
+    assert tool._weights_present()
+
+
+def test_maxim_failure_cleans_temporary_input(monkeypatch, tmp_path):
+    from executor.multitask_tools import MAXIM
+    tool = MAXIM("deraining")
+    tool.input_dir = tmp_path / "input"
+    tool.input_dir.mkdir()
+    (tool.input_dir / "input.png").write_bytes(b"image")
+
+    def fail(self):
+        self._preprocess()
+        raise RuntimeError("subprocess failure")
+
+    monkeypatch.setattr(Tool, "_invoke", fail)
+    with pytest.raises(RuntimeError, match="subprocess failure"):
+        tool._invoke()
+    assert sorted(p.name for p in tool.input_dir.iterdir()) == ["input.png"]
+
+
+def test_maxim_uses_separate_interpreter_and_gpu_policy(monkeypatch, tmp_path):
+    from executor.multitask_tools import MAXIM
+    python = tmp_path / "isolated environment" / "python"
+    monkeypatch.setenv("MAIR_MAXIM_PYTHON", str(python))
+    tool = MAXIM("deraining")
+    tool.input_dir, tool.output_dir = tmp_path / "in", tmp_path / "out"
+    assert tool._python_path() == python
+    command = tool._get_cmd()
+    assert command.startswith("XLA_PYTHON_CLIENT_PREALLOCATE=false JAX_PLATFORMS=cuda ")
+    assert "XLA_FLAGS=--xla_gpu_autotune_level=0" in command
+    assert str(python) in command

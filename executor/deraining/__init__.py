@@ -9,7 +9,7 @@ __all__ = ['deraining_toolbox']
 
 subtask = 'deraining'
 deraining_toolbox = [
-    # MAXIM(subtask=subtask),  # CPU慢，暂时排除
+    MAXIM(subtask=subtask),
     XRestormer(subtask=subtask),
     Restormer(subtask=subtask),
     MPRNet(subtask=subtask),

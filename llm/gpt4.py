@@ -210,7 +210,7 @@ class GPT4(BaseLLM):
             return False, ""
         try:
             format_check(obj)
-        except AssertionError as e:
+        except (AssertionError, TypeError, ValueError, KeyError) as e:
             self._log(f"Failed to pass the format check: {e}", level='warning')
             self._log(f"Response: {obj}", level='warning')
             return False, ""

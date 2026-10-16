@@ -49,6 +49,9 @@ REGISTRY: dict[Subtask, list[dict]] = {
         {"name": "xrestormer", "desc": "X-Restormer 去雾", "suitable": "一般雾", "speed": "中", "note": ""},
         {"name": "ridcp", "desc": "RIDCP 去雾", "suitable": "一般雾", "speed": "中", "note": ""},
         {"name": "dehazeformer", "desc": "DehazeFormer 去雾", "suitable": "一般雾", "speed": "中", "note": "Transformer"},
+        {"name": "dehazeformer_outdoor_b", "desc": "DehazeFormer Outdoor-B 去雾", "suitable": "室外场景；Table 15 明确列出此变体", "speed": "未核实", "note": "权重 saved_models/outdoor/dehazeformer-b.pth"},
+        {"name": "dehazeformer_indoor_b", "desc": "DehazeFormer Indoor-B 去雾", "suitable": "室内场景；Table 15 明确列出此变体", "speed": "未核实", "note": "权重 saved_models/indoor/dehazeformer-b.pth"},
+        {"name": "dehazeformer_indoor_l", "desc": "DehazeFormer Indoor-L 去雾", "suitable": "室内场景；Table 15 明确列出此变体", "speed": "未核实", "note": "权重 saved_models/indoor/dehazeformer-l.pth"},
         {"name": "maxim", "desc": "MAXIM 去雾", "suitable": "一般雾", "speed": "慢", "note": "JAX，慢"},
     ],
     "brightening": [
@@ -64,6 +67,20 @@ REGISTRY: dict[Subtask, list[dict]] = {
     ],
 }
 
+
+from paper_registry import FORMS as PAPER_FORMS
+
+# Keep independently written forms distinguishable from the published examples.
+for _task, _forms in REGISTRY.items():
+    for _form in _forms:
+        _form["source"] = "locally authored; not a published MAIR registry form"
+for _task, _forms in PAPER_FORMS.items():
+    for _form in _forms:
+        _existing = next((i for i, f in enumerate(REGISTRY[_task]) if f["name"] == _form["name"]), None)
+        if _existing is None:
+            REGISTRY[_task].append(_form)
+        else:
+            REGISTRY[_task][_existing] = _form
 
 # 注意：不再维护硬编码白名单（M07）。运行时以 available_tools() 的
 # 「代码 + 环境 + 权重」可用性检查为准，新增工具经检查即可被选择，

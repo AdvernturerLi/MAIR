@@ -10,6 +10,12 @@ from stage_prior import DEGRADATION_TO_SUBTASK
 
 
 def main() -> None:
+    from paper_resources import inventory
+    missing = [r for r in inventory() if not r["available"]]
+    print(f"Table 15 missing/unavailable tool variants: {len(missing)}")
+    for row in missing:
+        print(f"  {row['subtask']}/{row['tool']}: "
+              f"{'not registered' if not row['registered'] else 'no adapter' if not row['implemented'] else 'not deployed or invalid weights'}")
     print("=" * 84)
     print("MAIR 工具盘点（code / env / weights）")
     print("=" * 84)
